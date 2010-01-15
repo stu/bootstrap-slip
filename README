@@ -1,0 +1,39 @@
+bootstrap slip
+==============
+Something not quite scheme, something not quite lisp.
+Based on the tutorials by Peter Michaux.
+
+For those following Peters tutorials, his code and mine differ a great
+deal, probably the worst thing I did was use my own linked list code
+rather than using a PAIR object, so all his code dealing with pair
+objects for linked lists is completly different.
+
+Also, I have a context being passed around for all global variables.
+
+I dont think I have environments right (as per part 0.9).
+
+Also one test in #10 fails,
+
+(if #f 1) -> #t when it should return #f
+
+
+Build
+=====
+requires premake4 to generate the makefile. Get premake4 here
+http://industriousone.com/premake
+
+Generate your desired target build;
+
+vs2008		Visual Studio 2008 (or Express)
+vs2005		Visual Studio 2005 (or Express), SharpDevelop, or MonoDevelop
+vs2003		Visual Studio 2003
+vs2002		Visual Studio 2002
+gmake		GNU Make (including Cygwin and MinGW)
+xcode3		Apple Xcode 3
+codeblocks	Code::Blocks
+codelite	CodeLite
+
+I have only tested "premake4 gmake" on mingw + linux, but not generating
+VS or XCode solutions.
+
+

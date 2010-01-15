@@ -1,0 +1,7 @@
+(define a 0)
+a
+(set! a 1)
+a
+(define a 2)
+a
+(set! b 3)
