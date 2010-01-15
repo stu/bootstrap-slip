@@ -663,11 +663,6 @@ static void write_pair(pSlip gd, pSlipObject pair)
     pSlipObject car_obj;
     pSlipObject cdr_obj;
 
-	// Peters code does not seem to check if pair is an empty list
-	// (hence, it has null objects for car_obj/cdr_obj).
-	if(pair->type == eType_EMPTY_LIST)
-		return;
-
     car_obj = car(pair);
     cdr_obj = cdr(pair);
 
@@ -697,6 +692,9 @@ void slip_write(pSlip gd, pSlipObject obj)
 	switch (obj->type)
 	{
 		case eType_EMPTY_LIST:
+			printf("()");
+			break;
+
 		case eType_PAIR:
             printf("(");
 			write_pair(gd, obj);
