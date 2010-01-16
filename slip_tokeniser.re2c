@@ -39,7 +39,7 @@ pToken PP_IDToken(pSlip ctx, char *z)
 	H	= [a-fA-F0-9];
 	E	= [Ee] [+-]? D+;
 
-   BLAG = [#:;\{\}_+-|=~!#$%^&/*\'\",.<>?\\\[\]];
+   BLAG = [+/-*];
 	ESC	= [\\] ([abfnrtv?'"\\] | "x" H+ | O+);
 
 	PP = ("#"|"??=") [\t ]*;
@@ -71,6 +71,8 @@ pToken PP_IDToken(pSlip ctx, char *z)
 	"*/"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCOMMENT_END); }
 	"//"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCOMMENT_LINE); }
 
+
+   BLAG	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kID); }
 	L (L|D|BLAG)*	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kID); }
 
 	(LEADIN "0" [xX] H+) 	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kHEX_NUMBER); }

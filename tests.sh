@@ -9,4 +9,6 @@
 ./slip tests/repl_08.txt
 ./slip tests/repl_09.txt
 ./slip tests/repl_10.txt
+./slip tests/repl_11.txt
+
 

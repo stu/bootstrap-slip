@@ -58,12 +58,14 @@ typedef enum
 	eType_EMPTY_LIST,
 	eType_PAIR,
 	eType_SYMBOL,
+	eType_PRIMITIVE_PROC,
 
 	eType_MAX_TYPES
 
 } eSlipObjectType;
 
 typedef struct udtSlipObject uSlipObject, *pSlipObject;
+typedef struct udtSlip uSlip, *pSlip;
 
 struct udtSlipObject
 {
@@ -74,7 +76,7 @@ struct udtSlipObject
 	{
 		struct
 		{
-			int32_t value;
+			int64_t value;
 		} intnum;
 
 		struct
@@ -95,14 +97,19 @@ struct udtSlipObject
 
 		struct
 		{
-            pSlipObject car;
-            pSlipObject cdr;
+			pSlipObject car;
+			pSlipObject cdr;
 		} pair;
 
 		struct
 		{
 			char *value;
 		} symbol;
+
+		struct
+		{
+			pSlipObject (*func)(pSlip gd, pSlipObject args);
+		} prim_proc;
 
 	} data;
 };
@@ -121,11 +128,11 @@ typedef struct udtSlipEnvironment
 
 
 #define USER_OBJECT_ID_START		32
-typedef struct udtSlip
+struct udtSlip
 {
-	int			running;
+	int         running;
 
-	uint32_t	obj_id;		// object ID less than 32 are singleton objects
+	uint32_t    obj_id;		// object ID less than 32 are singleton objects
 
 	pSlipObject singleton_True;
 	pSlipObject singleton_False;
@@ -137,12 +144,12 @@ typedef struct udtSlip
 	pSlipObject singleton_OKSymbol;
 	pSlipObject singleton_IFSymbol;
 
-	DList		*lstSymbols;
-	DList		*lstStrings;
+	DList       *lstSymbols;
+	DList       *lstStrings;
 
-	DList		*lstObjects;
+	DList       *lstObjects;
 
-	DList		*lstGlobalEnvironment;
+	DList       *lstGlobalEnvironment;
 
 	struct parser_data
 	{
@@ -156,7 +163,7 @@ typedef struct udtSlip
 		int comment_depth;
 	} parse_data;
 
-} uSlip, *pSlip;
+};
 
 extern pSlipObject slip_evaluate(pSlip gd, pSlipObject exp);
 extern void slip_write(pSlip gd, pSlipObject obj);
@@ -177,11 +184,11 @@ extern void slip_parser_Free(void *p, void(*freeProc)(void*));
 extern void *slip_parser_Alloc(void *(*mallocProc)(size_t));
 
 extern void slip_parser_(
-		  void *yyp,                   /* The parser */
-		  int yymajor,                 /* The major token code number */
-		  pToken yyminor,       /* The value for the token */
-		  pSlip ctx               /* Optional %extra_argument parameter */
-		);
+						void *yyp,					/* The parser */
+						int yymajor,				/* The major token code number */
+						pToken yyminor,		  		/* The value for the token */
+						pSlip ctx					/* Optional %extra_argument parameter */
+						);
 
 
 #ifdef __cplusplus

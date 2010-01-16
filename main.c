@@ -1,5 +1,5 @@
 /*
- 	Bootstrap slip.
+	Bootstrap slip.
 
 	Ideas from bootstrap scheme from Peter Michaux (http://peter.michaux.ca/)
 */
@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <assert.h>
 #ifndef __MINGW_H
-#include <sys/stat.h>
+	#include <sys/stat.h>
 #endif
 
 #include "dlist.h"
@@ -166,7 +166,7 @@ static int TokeniseFiles(pSlip ctx, char *fn)
 	fp = NULL;
 #ifndef __MINGW_H
 	stat(fn, &sbuff);
-	if(S_ISREG(sbuff.st_mode) != 0)
+	if (S_ISREG(sbuff.st_mode) != 0)
 		fp = fopen(fn, "rb");
 #else
 	fp = fopen(fn, "rb");
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
 	FILE *fp = stdin;
 	buff = malloc(1024);
 
-	if(argc == 2)
+	if (argc == 2)
 	{
 		fp = fopen(argv[1], "rt");
 		assert(fp != NULL);
@@ -232,20 +232,20 @@ int main(int argc, char *argv[])
 		fgets(buff, 1023, fp);
 
 		// echo if script
-		if(fp != stdin)
+		if (fp != stdin)
 			printf("%s", buff);
 		else
 		{
 			// trim off cr/lf.s
-			p = strchr(buff, 0x0A); if(p != NULL) *p = 0;
-			p = strchr(buff, 0x0D); if(p != NULL) *p = 0;
+			p = strchr(buff, 0x0A); if (p != NULL) *p = 0;
+			p = strchr(buff, 0x0D); if (p != NULL) *p = 0;
 		}
 
 		fflush(stdout);
 
-		if(buff[0] != 0)
+		if (buff[0] != 0)
 		{
-			if( TokeniseBuffer(slip, buff, strlen(buff)) == 0)
+			if ( TokeniseBuffer(slip, buff, strlen(buff)) == 0)
 			{
 				/*
 				while (slip->parse_data.eCurrentToken != NULL)
@@ -259,10 +259,10 @@ int main(int argc, char *argv[])
 				*/
 
 				obj = slip_read(slip);
-				if(slip->running == SLIP_RUNNING && obj != NULL)
+				if (slip->running == SLIP_RUNNING && obj != NULL)
 				{
 					obj = slip_evaluate(slip, obj);
-					if(slip->running == SLIP_RUNNING && obj != NULL)
+					if (slip->running == SLIP_RUNNING && obj != NULL)
 						slip_write(slip, obj);
 				}
 			}
@@ -275,12 +275,12 @@ int main(int argc, char *argv[])
 			slip->running = SLIP_SHUTDOWN;
 	};
 
-	if(slip->running == SLIP_SHUTDOWN)
+	if (slip->running == SLIP_SHUTDOWN)
 		printf("\nThank you.\n");
 
 	slip_release(slip);
 
-	if(fp != stdin)
+	if (fp != stdin)
 		fclose(fp);
 
 	return 0;
