@@ -35,11 +35,18 @@ extern "C"{
 
 
 #define S_TRUE				1
-#define S_FALSE				0
+#define S_FALSE			0
 
 #define SLIP_RUNNING		0
 #define SLIP_SHUTDOWN		1
-#define SLIP_ERROR			2
+#define SLIP_ERROR		2
+
+typedef struct udtToken
+{
+	int id;
+	char *z;
+	int line;
+} uToken, *pToken;
 
 typedef enum
 {
@@ -130,15 +137,6 @@ typedef struct udtSlip
 	pSlipObject singleton_OKSymbol;
 	pSlipObject singleton_IFSymbol;
 
-	int			stream_index;
-	int			stream_length;
-	char		*stream;
-
-	// data used in parsing the input buffer
-	int			input_buffer_length;
-	int			input_buffer_index;
-	uint8_t	*input_buffer;
-
 	DList		*lstSymbols;
 	DList		*lstStrings;
 
@@ -146,15 +144,45 @@ typedef struct udtSlip
 
 	DList		*lstGlobalEnvironment;
 
+	struct parser_data
+	{
+		void *pParser;
+
+		DList *lstTokens;
+		DLElement *eCurrentToken;
+
+		int current_line;
+		char *buff_start;
+		int comment_depth;
+	} parse_data;
+
 } uSlip, *pSlip;
 
 extern pSlipObject slip_evaluate(pSlip gd, pSlipObject exp);
 extern void slip_write(pSlip gd, pSlipObject obj);
-extern pSlipObject slip_read(pSlip gd, char *input_stream, int input_stream_length);
+extern pSlipObject slip_read(pSlip gd);
 
 // setup + release of the interpreter data structure
 extern pSlip slip_init(void);
 extern void slip_release(pSlip gd);
+extern void slip_reset_parser(pSlip ctx);
+
+extern pToken re2c_NewToken(pSlip ctx, char *z, int len, int id);
+extern void token_destructor(pSlip ctx, pToken t);
+
+
+
+// from lemon
+extern void slip_parser_Free(void *p, void(*freeProc)(void*));
+extern void *slip_parser_Alloc(void *(*mallocProc)(size_t));
+
+extern void slip_parser_(
+		  void *yyp,                   /* The parser */
+		  int yymajor,                 /* The major token code number */
+		  pToken yyminor,       /* The value for the token */
+		  pSlip ctx               /* Optional %extra_argument parameter */
+		);
+
 
 #ifdef __cplusplus
 }

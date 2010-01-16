@@ -14,10 +14,52 @@
 
 #include "dlist.h"
 #include "slip.h"
+#include "slip_parser.h"
 
 static void throw_error(pSlip gd, char *s, ...);
 static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env);
-static pSlipObject slip_readin(pSlip gd);
+
+///////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FreeToken(void *t)
+{
+	pToken tt = t;
+
+	//LogInfo("free token (%i)[%s]\n", tt->id, tt->z);
+	if (tt == NULL)
+		return;
+
+	if (tt->z != NULL)
+		free(tt->z);
+
+	free(tt);
+}
+
+pToken re2c_NewToken(pSlip ctx, char *z, int len, int id)
+{
+	pToken x;
+
+	assert(ctx != NULL);
+
+	x = calloc(1, sizeof(uToken));
+
+	x->id = id;
+	x->z = calloc(1, len + 4);
+	x->line = ctx->parse_data.current_line;
+
+	memmove(x->z, z, len);
+
+	return x;
+}
+
+void token_destructor(pSlip ctx, pToken t)
+{
+
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
 
 static void FreeEnvironmentVariable(void *data)
 {
@@ -582,10 +624,10 @@ static int is_true(pSlip gd, pSlipObject obj)
 	//return !is_false(gd, obj);
 
 	// all values are true except for false itself.
-	if(gd->singleton_False != obj)
-		return S_TRUE;
-	else
+	if(gd->singleton_False == obj)
 		return S_FALSE;
+	else
+		return S_TRUE;
 }
 
 static pSlipObject if_alternative(pSlip gd, pSlipObject exp)
@@ -714,7 +756,7 @@ void slip_write(pSlip gd, pSlipObject obj)
 			break;
 
 		case eType_BOOL:
-			printf("#%c", sIsObject_Boolean(obj) == S_TRUE ? 't' : 'f');
+			printf("#%c", obj == gd->singleton_True ? 't' : 'f');
 			break;
 
 		case eType_STRING:
@@ -776,143 +818,102 @@ void slip_write(pSlip gd, pSlipObject obj)
 	}
 }
 
-static char is_delimiter(int c)
+static int is_delimiter(pToken tok)
 {
-	return isspace(c) || c == EOF || c == '(' || c == ')' || c == '"' ;
-}
+	if(tok == NULL)
+		return S_TRUE;
 
-static char is_initial(int c)
-{
-    return isalpha(c) || c == '*' || c == '/' || c == '>' || c == '<' || c == '=' || c == '?' || c == '!';
-}
-
-static int read_input(pSlip gd)
-{
-	if(gd->input_buffer_index > 0)
+	switch(tok->id)
 	{
-		gd->input_buffer_index -= 1;
-
-		return gd->input_buffer[gd->input_buffer_index];
-	}
-	else
-	{
-		if(gd->stream_length == gd->stream_index)
-			return EOF;
-		else
-			return gd->stream[gd->stream_index++];
-	}
-}
-
-static void buffer_input(pSlip gd, uint8_t value)
-{
-	if(gd->input_buffer_index == gd->input_buffer_length)
-	{
-		gd->input_buffer_length += 32;
-		gd->input_buffer = realloc(gd->input_buffer, gd->input_buffer_length);
-
-		assert(gd->input_buffer != NULL);
+		case kOPAREN:
+		case kCPAREN:
+		case kSTRING:
+		case kQUOTE:
+		case kNEWLINE:
+			return S_TRUE;
+			break;
 	}
 
-	gd->input_buffer[gd->input_buffer_index++] = value & 0xFF;
+	return S_FALSE;
 }
 
-static int peek_input(pSlip gd)
+static int is_initial(pToken tok)
 {
-	int c;
+    //return isalpha(c) || c == '*' || c == '/' || c == '>' || c == '<' || c == '=' || c == '?' || c == '!';
 
-	c = read_input(gd);
-	buffer_input(gd, c);
+	if(tok == NULL)
+		return S_FALSE;
 
-	return c;
-}
-
-static int expect(pSlip gd, char *str)
-{
-	char *xbuff;
-	int c;
-
-	xbuff = str;
-
-	while(*xbuff != 0)
+	switch(tok->id)
 	{
-		c = read_input(gd);
-		if(c != *xbuff)
-		{
-			buffer_input(gd, c);
-
-			while(str != xbuff)
-			{
-				buffer_input(gd, *xbuff--);
-			}
-
-			return -1;
-		}
-		else
-			xbuff++;
+		case kID:
+			return S_TRUE;
+			break;
 	}
 
-	return 0;
+	return S_FALSE;
+}
+
+static pToken read_input(pSlip gd)
+{
+	pToken t;
+
+	if(gd->parse_data.eCurrentToken == NULL)
+		return NULL;
+
+	t = dlist_data(gd->parse_data.eCurrentToken);
+	gd->parse_data.eCurrentToken = dlist_next(gd->parse_data.eCurrentToken);
+
+	return t;
+}
+
+static pToken peek_input(pSlip gd)
+{
+	pToken t;
+
+	if(gd->parse_data.eCurrentToken == NULL)
+		return NULL;
+
+	t = dlist_data(gd->parse_data.eCurrentToken);
+
+	return t;
 }
 
 static void expect_deliminter(pSlip gd)
 {
-    if (!is_delimiter( peek_input(gd)))
+    if (!is_delimiter(peek_input(gd)))
     {
 		throw_error(gd, "character not followed by delimiter\n");
     }
 }
 
-static void skip_whitespace(pSlip gd)
-{
-	int c;
-
-	c = peek_input(gd);
-
-	while(c == ' ' || c == '\t' || c == '\n')
-	{
-		c = read_input(gd);
-		c = peek_input(gd);
-	}
-}
-
 static pSlipObject read_pair(pSlip gd)
 {
-    int c;
+    pToken tok;
     pSlipObject car_obj;
     pSlipObject cdr_obj;
 
 	if(gd->running != SLIP_RUNNING)
 		return NULL;
 
-    skip_whitespace(gd);
-
-    c = read_input(gd);
-    if (c == ')')
+	tok = peek_input(gd);
+    if (tok->id == kCPAREN)
     {
+		tok = read_input(gd);
         return gd->singleton_EmptyList;
     }
 
-    buffer_input(gd, c);
+    car_obj = slip_read(gd);
 
-    car_obj = slip_readin(gd);
-
-    skip_whitespace(gd);
-
-    c = read_input(gd);
-    if (c == '.')
+    tok = peek_input(gd);
+    if (tok->id == kDOT)
     {
-        c = peek_input(gd);
-        if (!isspace(c))
-        {
-            throw_error(gd, "dot not followed by whitespace\n");
-	        return NULL;
-        }
+		tok = read_input(gd); // skip over dot
 
-        cdr_obj = slip_readin(gd);
+        cdr_obj = slip_read(gd);
 
-        skip_whitespace(gd);
-        c = read_input(gd);
-        if (c != ')')
+        tok = read_input(gd);
+        if (tok->id != kCPAREN)
         {
             throw_error(gd, "where was the trailing right paren?\n");
             return NULL;
@@ -922,250 +923,144 @@ static pSlipObject read_pair(pSlip gd)
     }
     else
     {
-        buffer_input(gd, c);
-
         cdr_obj = read_pair(gd);
         return cons(gd, car_obj, cdr_obj);
     }
 }
 
-static pSlipObject slip_readin(pSlip gd)
+pSlipObject slip_read(pSlip gd)
 {
-	int c;
-	int num_conversion = 10;
-	int sign = 1;
-	int32_t num = 0;
-
-	int buff_size = 8;
-	int buff_idx = 0;
-	uint8_t *buff;
-
+	pToken tok;
 	pSlipObject obj;
+
+	int buff_idx;
+	uint8_t *buff;
 
 	if(gd->running != SLIP_RUNNING)
 		return NULL;
 
-	while ((c = read_input(gd)) != EOF)
+	while ((tok = read_input(gd)) != NULL)
 	{
-		if (isspace(c) || c == 0x0A || c == 0x0D)
+		switch(tok->id)
 		{
-			continue;
-		}
-		else if (c == '#')
-		{
-			c = read_input(gd);
-			if (c == 't')
-				return gd->singleton_True;
-			else if (c == 'f')
-				return gd->singleton_False;
-			else if (c == '\\')
+			case kCHAR:
 			{
-				c = read_input(gd);
-
-				if(c == 't' && expect(gd, "ab") == 0)	// maybe tab
-					c = '\t';
-				else if(c == 'n' && expect(gd, "ewline") == 0) // maybe newline
-					c = '\n';
-				else if(c == 's' && expect(gd, "pace") == 0) // maybe space
-					c = ' ';
-
 				expect_deliminter(gd);
-
-				return s_NewCharacter(gd, c);
+				return s_NewCharacter(gd, tok->z[2]);
 			}
+			break;
 
-			throw_error(gd, "boolean not followed by t/f\n");
-			return NULL;
-		}
-		else if (isdigit(c) || (c == '-' && isdigit(peek_input(gd))) )
-		{
-			if (c == '-')
-			{
-				sign = -1;
-				c = read_input(gd);
-			}
+			case kTRUE:
+				return gd->singleton_True;
+				break;
 
-			if(c == '0')
-			{
-				c = read_input(gd);
-				if(c == 'x')
-				{
-					num_conversion = 16;
-				}
-				else
-				{
-					buffer_input(gd, c);
-				}
-			}
-			else
-			{
-				buffer_input(gd, c);
-			}
+			case kFALSE:
+				return gd->singleton_False;
+				break;
 
-			if(num_conversion == 10)
-			{
-				while (isdigit(c = read_input(gd)))
-				{
-					num = (num * num_conversion) + (c - '0');
-				}
-			}
-			else
-			{
-				while (isxdigit(c = read_input(gd)))
-				{
-					if(isdigit(c))
-						c -= '0';
-					else
-						c = toupper(c) - 'A' + 10;
+			case kCHAR_NEWLINE:
+				return s_NewCharacter(gd, '\n');
+				break;
+			case kCHAR_TAB:
+				return s_NewCharacter(gd, '\t');
+			case kCHAR_SPACE:
+				return s_NewCharacter(gd, ' ');
+				break;
 
-					num = (num * num_conversion) + c;
-				}
-			}
+			case kINT_NUMBER:
+				return s_NewInteger(gd, strtol(tok->z, NULL, 10));
+				break;
+			case kOCT_NUMBER:
+				return s_NewInteger(gd, strtol(tok->z, NULL, 8));
+				break;
+			case kHEX_NUMBER:
+				return s_NewInteger(gd, strtol(tok->z, NULL, 16));
+				break;
 
-			num *= sign;
-			if (is_delimiter(c))
-			{
-				buffer_input(gd, c);
-				return s_NewInteger(gd, num);
-			}
-			else
-			{
-				throw_error(gd, "number not followed by delimiter\n");
-				return NULL;
-			}
-		}
-		else if (is_initial(c) || ((c == '+' || c == '-') && is_delimiter(peek_input(gd))))
-		{
-			buff_size = 8;
-			buff_idx = 0;
+			case kID:
+				if(strcmp(tok->z, "quit") == 0)
+					gd->running = SLIP_SHUTDOWN;
 
-			buff = malloc(buff_size  + 1);
-			buff[0] = 0;
+//  			if (!is_delimiter(peek_input(gd)))
+//  			{
+//  				throw_error(gd, "symbol not followed by delimiter. Found \"%s\"\n", tok->z);
+//  				return NULL;
+//  			}
 
-            while (is_initial(c) || isdigit(c) || c == '+' || c == '-')
-            {
-				buff[buff_idx++] = c;
-				buff[buff_idx] = 0;
+				return s_NewSymbol(gd, tok->z);
+    			break;
 
-				if(buff_idx == buff_size)
-				{
-					buff_size *= 2;
-					buff = realloc(buff, buff_size);
-					assert(buff != NULL);
-				}
+        	case kSTRING:
+        		{
+					buff_idx = 0;
+					buff = malloc(strlen(tok->z)  + 1);
+					buff[0] = 0;
 
-                c = read_input(gd);
-            }
+					char *p;
 
-			if(strcmp(buff, "quit")==0)
-				gd->running = SLIP_SHUTDOWN;
+					p = tok->z;
+					p++;
 
-            if (!is_delimiter(c))
-            {
-                throw_error(gd, "symbol not followed by delimiter. Found '%c'\n", c);
-                return NULL;
-            }
-
-			buffer_input(gd, c);
-			obj = s_NewSymbol(gd, buff);
-
-            free(buff);
-
-            return obj;
-        }
-		else if(c == '\"')
-		{
-			buff_size = 8;
-			buff_idx = 0;
-
-			buff = malloc(buff_size  + 1);
-			buff[0] = 0;
-
-			while((c = read_input(gd)) != '\"')
-			{
-				switch(c)
-				{
-					case EOF:
-						throw_error(gd, "error in string\n");
-						return NULL;
-						break;
-
-					case '\\':
-						c = read_input(gd);
-						switch(c)
+					while(*p != 0)
+					{
+						if(*p == '\\')
 						{
-							case EOF:
-								throw_error(gd, "error in string\n");
-								return NULL;
-								break;
-
-							case 'r':
-								buff[buff_idx++] = '\r';
-								break;
-
-							case 'n':
-								buff[buff_idx++] = '\n';
-								break;
-
-							case 't':
-								buff[buff_idx++] = '\t';
-								break;
-
-							default:
-								buff[buff_idx++] = c;
-								break;
+							p++;
+							switch(*p)
+							{
+								case 'n':
+									buff[buff_idx++] = '\n';
+									p++;
+									break;
+								case 'r':
+									buff[buff_idx++] = '\r';
+									p++;
+									break;
+								case 't':
+									buff[buff_idx++] = '\t';
+									p++;
+									break;
+								default:
+									buff[buff_idx++] = *p++;
+									break;
+							}
 						}
-						break;
+						else
+						{
+							buff[buff_idx++] = *p++;
+						}
 
-					default:
-						buff[buff_idx++] = c;
-						break;
+						buff[buff_idx] = 0;
+					}
+
+					buff[buff_idx-1] = 0;
+
+
+        			obj = s_NewString(gd, buff, buff_idx);
+
+        			free(buff);
+        			return obj;
 				}
+				break;
 
-				// we have a +1 grace so this works.
-				buff[buff_idx] = 0;
-				if(buff_idx == buff_size)
-				{
-					buff_size *= 2;
-					buff = realloc(buff, buff_size);
-					assert(buff != NULL);
-				}
-			}
+			case kOPAREN:
+				return read_pair(gd);
+				break;
 
-			obj = s_NewString(gd, buff, buff_idx);
+			case kQUOTE:
+				return cons(gd, gd->singleton_QuoteSymbol, cons(gd, slip_read(gd), gd->singleton_EmptyList));
+				break;
 
-			free(buff);
+			default:
+				throw_error(gd, "bad input. Unexpected \"%s\"\n", tok->z);
+				return NULL;
 
-			return obj;
-		}
-		else if (c == '(')
-		{
-            return read_pair(gd);
-        }
-        else if (c == '\'')
-        {
-            return cons(gd, gd->singleton_QuoteSymbol, cons(gd, slip_readin(gd), gd->singleton_EmptyList));
-        }
-		else
-		{
-			throw_error(gd, "bad input. Unexpected '%c'\n", c);
-			return NULL;
 		}
 	}
 
 	throw_error(gd, "read illegal state\n");
 	return NULL;
 }
-
-pSlipObject slip_read(pSlip gd, char *input_stream, int input_stream_length)
-{
-	gd->stream = input_stream;
-	gd->stream_index = 0;
-	gd->stream_length = input_stream_length;
-
-	return slip_readin(gd);
-}
-
 
 pSlip slip_init(void)
 {
@@ -1185,10 +1080,6 @@ pSlip slip_init(void)
 	s->singleton_EmptyList = s_NewObject(s);
 	s->singleton_EmptyList->type = eType_EMPTY_LIST;
 
-	s->input_buffer_index = 0;
-	s->input_buffer_length = 32;
-	s->input_buffer = malloc(s->input_buffer_length);
-
 	s->singleton_QuoteSymbol = s_NewSymbol(s, "quote");
 	s->singleton_DefineSymbol = s_NewSymbol(s, "define");
 	s->singleton_OKSymbol = s_NewSymbol(s, "ok");
@@ -1198,12 +1089,17 @@ pSlip slip_init(void)
 	s->obj_id = USER_OBJECT_ID_START;
 	s->running = SLIP_RUNNING;
 
+	s->parse_data.lstTokens = NewDList(FreeToken);
+	//s->parse_data.pParser = slip_parser_Alloc(malloc);
+
 	return s;
 }
 
 void slip_release(pSlip gd)
 {
 	DLElement *e;
+
+	//slip_parser_Free(gd->parse_data.pParser, free);
 
 	e = dlist_tail(gd->lstObjects);
 
@@ -1219,13 +1115,22 @@ void slip_release(pSlip gd)
 
 	FreeDList(gd->lstObjects);
 
-	free(gd->input_buffer);
-
 	FreeDList(gd->lstSymbols);
 	FreeDList(gd->lstStrings);
-
 	FreeDList(gd->lstGlobalEnvironment);
+
+	FreeDList(gd->parse_data.lstTokens);
 
 	free(gd);
 }
 
+void slip_reset_parser(pSlip slip)
+{
+	//slip_parser_Free(slip->parse_data.pParser, free);
+	//slip->parse_data.pParser = slip_parser_Alloc(malloc);
+
+	dlist_empty(slip->parse_data.lstTokens);
+	slip->parse_data.current_line = 0;
+	slip->parse_data.eCurrentToken = NULL;
+	slip->parse_data.comment_depth = 0;
+}

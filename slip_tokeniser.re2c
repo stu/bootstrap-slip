@@ -1,0 +1,95 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <ctype.h>
+#include <stdarg.h>
+#include <assert.h>
+
+#include "dlist.h"
+#include "slip.h"
+
+#include "slip_parser.h"
+
+#define	YYCTYPE		char
+#define	YYCURSOR	cursor
+#define	YYMARKER	marker
+#define YYFIL
+
+pToken PP_IDToken(pSlip ctx, char *z)
+{
+	char *cursor = z;
+	char *marker = cursor;
+
+	start:
+	ctx->parse_data.buff_start = cursor;
+
+	if(*marker == 0x0)
+		return NULL;
+
+	marker = cursor;
+
+	/*!re2c
+	re2c:yyfill:enable   = 0;
+
+	any	= [\000-\377];
+	O	= [0-7];
+	D	= [0-9];
+	L	= [a-zA-Z_];
+	H	= [a-fA-F0-9];
+	E	= [Ee] [+-]? D+;
+
+   BLAG = [#:;\{\}_+-|=~!#$%^&/*\'\",.<>?\\\[\]];
+	ESC	= [\\] ([abfnrtv?'"\\] | "x" H+ | O+);
+
+	PP = ("#"|"??=") [\t ]*;
+	PRAGMA = PP "pragma" [ \t]+;
+
+	LEADIN = [-+]*;
+	*/
+
+	/*!re2c
+	[\t\v\f ]+ { goto start; }
+	[\n\r]+ 	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kNEWLINE); }
+
+	"#t"		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kTRUE); }
+	"#f"		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kFALSE); }
+
+	"#\\newline"	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCHAR_NEWLINE); }
+	"#\\space"	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCHAR_SPACE); }
+	"#\\tab"		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCHAR_TAB); }
+
+	"#\\" L		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCHAR); }
+
+	"("			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kOPAREN); }
+	")"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCPAREN); }
+
+	("'") { return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kQUOTE); }
+
+
+	"/*"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCOMMENT_START); }
+	"*/"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCOMMENT_END); }
+	"//"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kCOMMENT_LINE); }
+
+	L (L|D|BLAG)*	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kID); }
+
+	(LEADIN "0" [xX] H+) 	{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kHEX_NUMBER); }
+	(LEADIN "0" D+) 		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kOCT_NUMBER); }
+	(LEADIN D+) 			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kINT_NUMBER); }
+
+	(["] (ESC|any\[\n\\"])* ["]) { return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kSTRING); }
+
+	"."				{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kDOT); }
+	*/
+
+	return NULL;
+}
+
+/*
+
+"set!"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kSET); }
+	"define"		{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kDEFINE); }
+	"ok"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kOK); }
+	"if"			{ return re2c_NewToken(ctx, ctx->parse_data.buff_start, cursor - ctx->parse_data.buff_start, kIF); }
+
+*/

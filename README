@@ -1,7 +1,7 @@
 bootstrap slip
 ==============
 Something not quite scheme, something not quite lisp.
-Based on the tutorials by Peter Michaux.
+Based on the tutorials by Peter Michaux at http://peter.michaux.ca/
 
 For those following Peters tutorials, his code and mine differ a great
 deal, probably the worst thing I did was use my own linked list code
@@ -10,15 +10,20 @@ objects for linked lists is completly different.
 
 Also, I have a context being passed around for all global variables.
 
-I dont think I have environments right (as per part 0.9).
-
-Also one test in #10 fails,
-
-(if #f 1) -> #t when it should return #f
+I dont think I have environments right (as per part 0.9)
 
 
 Build
 =====
+Requirements;
+- premake4
+- re2c
+
+re2c is used to generate the tokeniser. You can get re2c here;
+http://sourceforge.net/projects/re2c/files/
+
+Premake4 is used to generate the makefiles or solutions for your platform.
+
 requires premake4 to generate the makefile. Get premake4 here
 http://industriousone.com/premake
 
