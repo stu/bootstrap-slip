@@ -35,11 +35,11 @@ extern "C"{
 
 
 #define S_TRUE				1
-#define S_FALSE			0
+#define S_FALSE				0
 
 #define SLIP_RUNNING		0
 #define SLIP_SHUTDOWN		1
-#define SLIP_ERROR		2
+#define SLIP_ERROR			2
 
 typedef struct udtToken
 {
@@ -111,6 +111,11 @@ struct udtSlipObject
 			pSlipObject (*func)(pSlip gd, pSlipObject args);
 		} prim_proc;
 
+		struct
+		{
+			DList *lstObjects;
+		} module;
+
 	} data;
 };
 
@@ -165,6 +170,29 @@ struct udtSlip
 
 };
 
+extern pSlipObject s_NewObject(pSlip gd);
+extern pSlipObject s_NewInteger(pSlip gd, int64_t value);
+extern pSlipObject s_NewCharacter(pSlip gd, int64_t value);
+extern pSlipObject s_NewString(pSlip gd, uint8_t *data, int length);
+extern pSlipObject s_NewSymbol(pSlip gd, uint8_t *data);
+extern pSlipObject s_NewBool(pSlip gd, int value);
+
+extern int sIsObject_EmptyList(pSlip gd, pSlipObject obj);
+extern int sIsObject_String(pSlipObject obj);
+extern int sIsObject_Character(pSlipObject obj);
+extern int sIsObject_Pair(pSlipObject obj);
+extern int sIsObject_Boolean(pSlipObject obj);
+extern int sIsObject_Symbol(pSlipObject obj);
+extern int sIsObject_Integer(pSlipObject obj);
+
+extern void throw_error(pSlip gd, char *s, ...);
+extern void slip_add_procedure(pSlip gd, pSlipEnvironment env, char *sym, pSlipObject (*func)(pSlip gd, pSlipObject args));
+
+extern pSlipObject cons(pSlip gd, pSlipObject car, pSlipObject cdr);
+extern pSlipObject car(pSlipObject pair);
+extern pSlipObject cdr(pSlipObject pair);
+
+
 extern pSlipObject slip_evaluate(pSlip gd, pSlipObject exp);
 extern void slip_write(pSlip gd, pSlipObject obj);
 extern pSlipObject slip_read(pSlip gd);
@@ -175,21 +203,6 @@ extern void slip_release(pSlip gd);
 extern void slip_reset_parser(pSlip ctx);
 
 extern pToken re2c_NewToken(pSlip ctx, char *z, int len, int id);
-extern void token_destructor(pSlip ctx, pToken t);
-
-
-
-// from lemon
-extern void slip_parser_Free(void *p, void(*freeProc)(void*));
-extern void *slip_parser_Alloc(void *(*mallocProc)(size_t));
-
-extern void slip_parser_(
-						void *yyp,					/* The parser */
-						int yymajor,				/* The major token code number */
-						pToken yyminor,		  		/* The value for the token */
-						pSlip ctx					/* Optional %extra_argument parameter */
-						);
-
 
 #ifdef __cplusplus
 }

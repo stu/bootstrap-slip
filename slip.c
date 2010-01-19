@@ -16,12 +16,11 @@
 #include "dlist.h"
 #include "slip.h"
 #include "slip_parser.h"
+#include "slip_primitives.h"
 
-static void throw_error(pSlip gd, char *s, ...);
 static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
 
 void FreeToken(void *t)
 {
@@ -54,10 +53,6 @@ pToken re2c_NewToken(pSlip ctx, char *z, int len, int id)
 	return x;
 }
 
-void token_destructor(pSlip ctx, pToken t)
-{
-
-}
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +95,7 @@ static pSlipEnvironment NewEnvironment(void)
 
 
 // gd can be null here, as we initialise the singleton TRUE/FALSE objects
-static pSlipObject s_NewObject(pSlip gd)
+pSlipObject s_NewObject(pSlip gd)
 {
 	pSlipObject o;
 
@@ -170,7 +165,7 @@ static void s_ReleaseObject(pSlip gd, pSlipObject obj)
 	free(obj);
 }
 
-static pSlipObject s_NewInteger(pSlip gd, int64_t value)
+pSlipObject s_NewInteger(pSlip gd, int64_t value)
 {
 	pSlipObject obj;
 
@@ -182,7 +177,7 @@ static pSlipObject s_NewInteger(pSlip gd, int64_t value)
 	return obj;
 }
 
-static pSlipObject s_NewCharacter(pSlip gd, int value)
+pSlipObject s_NewCharacter(pSlip gd, int64_t value)
 {
 	pSlipObject obj;
 
@@ -194,7 +189,7 @@ static pSlipObject s_NewCharacter(pSlip gd, int value)
 	return obj;
 }
 
-static pSlipObject s_NewString(pSlip gd, uint8_t *data, int length)
+pSlipObject s_NewString(pSlip gd, uint8_t *data, int length)
 {
 	pSlipObject obj;
 	DLElement *e;
@@ -225,7 +220,7 @@ static pSlipObject s_NewString(pSlip gd, uint8_t *data, int length)
 }
 
 
-static pSlipObject s_NewSymbol(pSlip gd, uint8_t *data)
+pSlipObject s_NewSymbol(pSlip gd, uint8_t *data)
 {
 	pSlipObject obj;
 	DLElement *e;
@@ -250,7 +245,7 @@ static pSlipObject s_NewSymbol(pSlip gd, uint8_t *data)
 	return obj;
 }
 
-static pSlipObject s_NewBool(pSlip gd, int value)
+pSlipObject s_NewBool(pSlip gd, int value)
 {
 	pSlipObject obj;
 
@@ -264,7 +259,7 @@ static pSlipObject s_NewBool(pSlip gd, int value)
 	return obj;
 }
 
-static int sIsObject_EmptyList(pSlip gd, pSlipObject obj)
+int sIsObject_EmptyList(pSlip gd, pSlipObject obj)
 {
 	if (obj->type == eType_EMPTY_LIST)
 		return S_TRUE;
@@ -272,7 +267,7 @@ static int sIsObject_EmptyList(pSlip gd, pSlipObject obj)
 		return S_FALSE;
 }
 
-static int sIsObject_String(pSlipObject obj)
+int sIsObject_String(pSlipObject obj)
 {
 	if (obj->type == eType_STRING)
 		return S_TRUE;
@@ -280,7 +275,7 @@ static int sIsObject_String(pSlipObject obj)
 		return S_FALSE;
 }
 
-static int sIsObject_Character(pSlipObject obj)
+int sIsObject_Character(pSlipObject obj)
 {
 	if (obj->type == eType_CHARACTER)
 		return S_TRUE;
@@ -288,7 +283,7 @@ static int sIsObject_Character(pSlipObject obj)
 		return S_FALSE;
 }
 
-static int sIsObject_Pair(pSlipObject obj)
+int sIsObject_Pair(pSlipObject obj)
 {
 	if (obj->type == eType_PAIR)
 		return S_TRUE;
@@ -296,7 +291,7 @@ static int sIsObject_Pair(pSlipObject obj)
 		return S_FALSE;
 }
 
-static int sIsObject_Boolean(pSlipObject obj)
+int sIsObject_Boolean(pSlipObject obj)
 {
 	if (obj->type == eType_BOOL)
 		return S_TRUE;
@@ -304,7 +299,7 @@ static int sIsObject_Boolean(pSlipObject obj)
 		return S_FALSE;
 }
 
-static int sIsObject_Symbol(pSlipObject obj)
+int sIsObject_Symbol(pSlipObject obj)
 {
 	if (obj->type == eType_SYMBOL)
 		return S_TRUE;
@@ -313,17 +308,9 @@ static int sIsObject_Symbol(pSlipObject obj)
 }
 
 
-static int sIsObject_Integer(pSlipObject obj)
+int sIsObject_Integer(pSlipObject obj)
 {
 	if (obj->type == eType_INTNUM)
-		return S_TRUE;
-	else
-		return S_FALSE;
-}
-
-static int sIsObject_Nil(pSlipObject obj)
-{
-	if (obj->type == eType_NIL)
 		return S_TRUE;
 	else
 		return S_FALSE;
@@ -341,12 +328,12 @@ pSlipObject s_NewPair(pSlip gd, pSlipObject car, pSlipObject cdr)
 	return obj;
 }
 
-static pSlipObject cons(pSlip gd, pSlipObject car, pSlipObject cdr)
+pSlipObject cons(pSlip gd, pSlipObject car, pSlipObject cdr)
 {
 	return s_NewPair(gd, car, cdr);
 }
 
-static pSlipObject car(pSlipObject pair)
+pSlipObject car(pSlipObject pair)
 {
 	return pair->data.pair.car;
 }
@@ -356,7 +343,7 @@ static void set_car(pSlipObject obj, pSlipObject value)
 	obj->data.pair.car = value;
 }
 
-static pSlipObject cdr(pSlipObject pair)
+pSlipObject cdr(pSlipObject pair)
 {
 	return pair->data.pair.cdr;
 }
@@ -432,6 +419,17 @@ static void set_variable_value(pSlip gd, pSlipObject var, pSlipObject val, pSlip
 	throw_error(gd, "unbound variable %s for assignment\n", (char*)var->data.symbol.value);
 }
 
+static pSlipObject make_primitive_proc(pSlip gd, pSlipObject (*func)(pSlip gd, pSlipObject args))
+{
+	pSlipObject obj;
+
+	obj = s_NewObject(gd);
+	obj->type = eType_PRIMITIVE_PROC;
+	obj->data.prim_proc.func = func;
+
+	return obj;
+}
+
 static void define_variable(pSlip gd, pSlipObject var, pSlipObject val, pSlipEnvironment env)
 {
 	DLElement *e;
@@ -455,6 +453,11 @@ static void define_variable(pSlip gd, pSlipObject var, pSlipObject val, pSlipEnv
 	v->var = var;
 	v->val = val;
 	dlist_ins(env->lstVars, v);
+}
+
+void slip_add_procedure(pSlip gd, pSlipEnvironment env, char *sym, pSlipObject (*func)(pSlip gd, pSlipObject args))
+{
+	define_variable(gd, s_NewSymbol(gd, sym), make_primitive_proc(gd, func), env);
 }
 
 static pSlipEnvironment setup_environment(pSlip gd)
@@ -541,7 +544,7 @@ pSlipObject definition_value(pSlipObject exp)
 }
 
 
-static void throw_error(pSlip gd, char *s, ...)
+void throw_error(pSlip gd, char *s, ...)
 {
 	va_list args;
 	char *x;
@@ -559,138 +562,14 @@ static void throw_error(pSlip gd, char *s, ...)
 	gd->running = SLIP_ERROR;
 }
 
-static pSlipObject make_primitive_proc(pSlip gd, pSlipObject (*func)(pSlip gd, pSlipObject args))
-{
-	pSlipObject obj;
-
-	obj = s_NewObject(gd);
-	obj->type = eType_PRIMITIVE_PROC;
-	obj->data.prim_proc.func = func;
-
-	return obj;
-}
 
 static int sIsObject_PrimitiveProc(pSlipObject obj)
 {
-	if(obj->type == eType_PRIMITIVE_PROC)
+	if (obj->type == eType_PRIMITIVE_PROC)
 		return S_TRUE;
 	else
 		return S_FALSE;
 }
-
-static pSlipObject slip_primitive__add_proc(pSlip gd, pSlipObject args)
-{
-	int64_t result = 0;
-	int count = 0;
-	while (sIsObject_EmptyList(gd, args) == S_FALSE)
-	{
-		if(car(args)->type != eType_INTNUM)
-		{
-			throw_error(gd, "Arithmatic on non numeric data\n");
-			return s_NewInteger(gd, 0);
-		}
-
-		if(count == 0)
-		{
-			count++;
-			result = (car(args))->data.intnum.value;
-		}
-		else
-			result += (car(args))->data.intnum.value;
-
-		args = cdr(args);
-	}
-
-	return s_NewInteger(gd, result);
-}
-
-
-static pSlipObject slip_primitive__sub_proc(pSlip gd, pSlipObject args)
-{
-	int64_t result = 0;
-	int count = 0;
-
-	while (sIsObject_EmptyList(gd, args) == S_FALSE)
-	{
-		if(car(args)->type != eType_INTNUM)
-		{
-			throw_error(gd, "Arithmatic on non numeric data\n");
-			return s_NewInteger(gd, 0);
-		}
-
-		if(count == 0)
-		{
-			count++;
-			result = (car(args))->data.intnum.value;
-		}
-		else
-			result -= (car(args))->data.intnum.value;
-		args = cdr(args);
-	}
-
-	return s_NewInteger(gd, result);
-}
-
-static pSlipObject slip_primitive__mul_proc(pSlip gd, pSlipObject args)
-{
-	int64_t result = 1;
-	int count = 0;
-
-	while (sIsObject_EmptyList(gd, args) == S_FALSE)
-	{
-		if(car(args)->type != eType_INTNUM)
-		{
-			throw_error(gd, "Arithmatic on non numeric data\n");
-			return s_NewInteger(gd, 0);
-		}
-
-		if(count == 0)
-		{
-			count++;
-			result = (car(args))->data.intnum.value;
-		}
-		else
-			result *= (car(args))->data.intnum.value;
-		args = cdr(args);
-	}
-
-	return s_NewInteger(gd, result);
-}
-
-
-static pSlipObject slip_primitive__div_proc(pSlip gd, pSlipObject args)
-{
-	int64_t result = 0;
-	int count = 0;
-
-	while (sIsObject_EmptyList(gd, args) == S_FALSE)
-	{
-		if(car(args)->type != eType_INTNUM)
-		{
-			throw_error(gd, "Arithmatic on non numeric data\n");
-			return s_NewInteger(gd, 0);
-		}
-
-		if (car(args)->data.intnum.value == 0)
-		{
-			throw_error(gd, "Divide by zero\n");
-			return s_NewInteger(gd, 0);
-		}
-
-		if(count == 0)
-		{
-			count++;
-			result = (car(args))->data.intnum.value;
-		}
-		else
-			result /= (car(args))->data.intnum.value;
-
-		args = cdr(args);
-	}
-
-	return s_NewInteger(gd, result);
-}
-
 
 pSlipObject eval_assignment(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 {
@@ -778,52 +657,52 @@ static pSlipObject if_alternative(pSlip gd, pSlipObject exp)
 
 static int is_application(pSlipObject exp)
 {
-    return sIsObject_Pair(exp);
+	return sIsObject_Pair(exp);
 }
 
 static pSlipObject slip_operator(pSlipObject exp)
 {
-    return car(exp);
+	return car(exp);
 }
 
 static pSlipObject operands(pSlipObject exp)
 {
-    return cdr(exp);
+	return cdr(exp);
 }
 
 int is_no_operands(pSlip gd, pSlipObject ops)
 {
-    return sIsObject_EmptyList(gd, ops);
+	return sIsObject_EmptyList(gd, ops);
 }
 
 static pSlipObject first_operand(pSlipObject ops)
 {
-    return car(ops);
+	return car(ops);
 }
 
 static pSlipObject rest_operands(pSlipObject ops)
 {
-    return cdr(ops);
+	return cdr(ops);
 }
 
 static pSlipObject list_of_values(pSlip gd, pSlipObject exps, pSlipEnvironment env)
 {
-    if (is_no_operands(gd, exps))
+	if (is_no_operands(gd, exps))
 	{
-        return gd->singleton_EmptyList;
-    }
-    else
+		return gd->singleton_EmptyList;
+	}
+	else
 	{
-        return cons(gd, slip_eval(gd, first_operand(exps), env), list_of_values(gd, rest_operands(exps), env));
-    }
+		return cons(gd, slip_eval(gd, first_operand(exps), env), list_of_values(gd, rest_operands(exps), env));
+	}
 }
 
 static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 {
 	pSlipObject proc;
-    pSlipObject args;
+	pSlipObject args;
 
-tailcall:
+	tailcall:
 	if (is_self_evaluating(exp) == S_TRUE)
 	{
 		return exp;
@@ -851,11 +730,20 @@ tailcall:
 	}
 	else if (is_application(exp))
 	{
-        proc = slip_eval(gd, slip_operator(exp), env);
-        args = list_of_values(gd, operands(exp), env);
+		proc = slip_eval(gd, slip_operator(exp), env);
+		if (proc->type == eType_PRIMITIVE_PROC)
+		{
+			args = list_of_values(gd, operands(exp), env);
 
-        return proc->data.prim_proc.func(gd, args);
-    }
+			if (proc == NULL)
+				return gd->singleton_False;
+
+			return proc->data.prim_proc.func(gd, args);
+		}
+		else
+			return proc;
+
+	}
 	else
 	{
 		throw_error(gd, "cannot eval unknown expression type\n");
@@ -981,6 +869,7 @@ void slip_write(pSlip gd, pSlipObject obj)
 			break;
 
 		case eType_CHARACTER:
+			printf("#\\");
 			switch (obj->data.character.value)
 			{
 				case '\t':
@@ -1019,6 +908,10 @@ static int is_delimiter(pToken tok)
 		case kSTRING:
 		case kQUOTE:
 		case kNEWLINE:
+		case kCHAR:
+		case kHEX_NUMBER:
+		case kOCT_NUMBER:
+		case kINT_NUMBER:
 			return S_TRUE;
 			break;
 	}
@@ -1068,7 +961,7 @@ static pToken peek_input(pSlip gd)
 	return t;
 }
 
-static void expect_deliminter(pSlip gd)
+static void expect_delimiter(pSlip gd)
 {
 	if (!is_delimiter(peek_input(gd)))
 	{
@@ -1095,7 +988,12 @@ static pSlipObject read_pair(pSlip gd)
 	car_obj = slip_read(gd);
 
 	tok = peek_input(gd);
-	if (tok->id == kDOT)
+	if(tok == NULL)
+	{
+		throw_error(gd, "Unclosed list\n");
+		return cons(gd, car_obj, gd->singleton_EmptyList);
+	}
+	else if (tok->id == kDOT)
 	{
 		tok = read_input(gd); // skip over dot
 
@@ -1134,7 +1032,7 @@ pSlipObject slip_read(pSlip gd)
 		{
 			case kCHAR:
 				{
-					expect_deliminter(gd);
+					expect_delimiter(gd);
 					return s_NewCharacter(gd, tok->z[2]);
 				}
 				break;
@@ -1247,7 +1145,7 @@ pSlipObject slip_read(pSlip gd)
 		}
 	}
 
-	throw_error(gd, "read illegal state\n");
+	//throw_error(gd, "read illegal state\n");
 	return NULL;
 }
 
@@ -1280,12 +1178,8 @@ pSlip slip_init(void)
 	s->running = SLIP_RUNNING;
 
 	s->parse_data.lstTokens = NewDList(FreeToken);
-	//s->parse_data.pParser = slip_parser_Alloc(malloc);
 
-	define_variable(s, s_NewSymbol(s, "+"), make_primitive_proc(s, slip_primitive__add_proc), env);
-	define_variable(s, s_NewSymbol(s, "-"), make_primitive_proc(s, slip_primitive__sub_proc), env);
-	define_variable(s, s_NewSymbol(s, "*"), make_primitive_proc(s, slip_primitive__mul_proc), env);
-	define_variable(s, s_NewSymbol(s, "/"), make_primitive_proc(s, slip_primitive__div_proc), env);
+	slip_install_primitives(s, env);
 
 	return s;
 }
@@ -1293,8 +1187,6 @@ pSlip slip_init(void)
 void slip_release(pSlip gd)
 {
 	DLElement *e;
-
-	//slip_parser_Free(gd->parse_data.pParser, free);
 
 	e = dlist_tail(gd->lstObjects);
 
@@ -1321,9 +1213,6 @@ void slip_release(pSlip gd)
 
 void slip_reset_parser(pSlip slip)
 {
-	//slip_parser_Free(slip->parse_data.pParser, free);
-	//slip->parse_data.pParser = slip_parser_Alloc(malloc);
-
 	dlist_empty(slip->parse_data.lstTokens);
 	slip->parse_data.current_line = 0;
 	slip->parse_data.eCurrentToken = NULL;

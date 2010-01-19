@@ -3,12 +3,9 @@
 *.vtg
 *.vpwhistu
 slip.make
-lemon.make
 Makefile
 obj
 slip
 slip.exe
 slip_tokeniser.c
-lemon/lemon
-lemon/lemon.exe
 

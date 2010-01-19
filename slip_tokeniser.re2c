@@ -39,7 +39,7 @@ pToken PP_IDToken(pSlip ctx, char *z)
 	H	= [a-fA-F0-9];
 	E	= [Ee] [+-]? D+;
 
-   BLAG = [+/-*!];
+   BLAG = [+/-*!>?];
 	ESC	= [\\] ([abfnrtv?'"\\] | "x" H+ | O+);
 
 	PP = ("#"|"??=") [\t ]*;

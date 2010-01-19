@@ -247,17 +247,6 @@ int main(int argc, char *argv[])
 		{
 			if ( TokeniseBuffer(slip, buff, strlen(buff)) == 0)
 			{
-				/*
-				while (slip->parse_data.eCurrentToken != NULL)
-				{
-					pToken t;
-					t = dlist_data(slip->parse_data.eCurrentToken);
-					assert(t != NULL);
-					slip_parser_(slip->parse_data.pParser, t->id, t, slip);
-					slip->parse_data.eCurrentToken = dlist_next(slip->parse_data.eCurrentToken);
-				}
-				*/
-
 				obj = slip_read(slip);
 				if (slip->running == SLIP_RUNNING && obj != NULL)
 				{
@@ -285,20 +274,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
-/*
-  while (ctx->eCurrentToken != NULL)
-	{
-		pToken t;
-
-		t = dlist_data(ctx->eCurrentToken);
-
-
-		//LogInfo("pass in %s(%i)(%i)[%s]\n", t->file, t->line, t->id, t->z);
-		xcc_parser_(ctx->pParser, t->id, t, ctx);
-
-		ctx->eCurrentToken = dlist_next(ctx->eCurrentToken);
-	}
-
-	xcc_parser_(ctx->pParser, 0, NULL, ctx);
-*/
