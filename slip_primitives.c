@@ -421,6 +421,14 @@ static pSlipObject slip_primitive__is_string(pSlip gd, pSlipObject args)
 		return slip_primitive__is_type_x(gd, car(args), eType_STRING);
 }
 
+static pSlipObject slip_primitive__is_nil(pSlip gd, pSlipObject args)
+{
+	if (sIsObject_EmptyList(gd, cdr(args)) == S_FALSE)
+		return slip_primitive__is_type_x(gd, args, eType_NIL);
+	else
+		return slip_primitive__is_type_x(gd, car(args), eType_NIL);
+}
+
 static pSlipObject slip_primitive__is_symbol(pSlip gd, pSlipObject args)
 {
 	if (sIsObject_EmptyList(gd, cdr(args)) == S_FALSE)
@@ -455,11 +463,173 @@ static pSlipObject slip_primitive__is_proc(pSlip gd, pSlipObject args)
 
 static pSlipObject slip_primitive__is_pair(pSlip gd, pSlipObject args)
 {
-	if (sIsObject_EmptyList(gd, cdr(args)) == S_FALSE)
-		return slip_primitive__is_type_x(gd, args, eType_PAIR);
+	if (args->type == eType_PAIR)
+		return gd->singleton_True;
 	else
-		return slip_primitive__is_type_x(gd, car(args), eType_PAIR);
+		return gd->singleton_False;
 }
+
+pSlipObject slip_primitive__quotient(pSlip gd, pSlipObject args)
+{
+	return s_NewInteger(gd, ((car(args) )->data.intnum.value) / ((cadr(args))->data.intnum.value));
+}
+
+pSlipObject slip_primitive__remainder(pSlip gd, pSlipObject args)
+{
+	return s_NewInteger(gd, ((car(args) )->data.intnum.value) % ((cadr(args))->data.intnum.value));
+}
+
+pSlipObject slip_primitive__is_num_equal(pSlip gd, pSlipObject args)
+{
+	int64_t value;
+
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "equal on non-integer");
+		return gd->singleton_False;
+	}
+
+	value = (car(args))->data.intnum.value;
+
+	args = cdr(args);
+
+	while (sIsObject_EmptyList(gd, args) == S_FALSE)
+	{
+		if (car(args)->type != eType_INTNUM)
+		{
+			throw_error(gd, "equal on non-integer");
+			return gd->singleton_False;
+		}
+
+		if (value != car(args)->data.intnum.value)
+		{
+			return gd->singleton_False;
+		}
+	}
+	return gd->singleton_True;
+}
+
+pSlipObject slip_primitive__quotient_proc(pSlip gd, pSlipObject args)
+{
+	div_t nn;
+	int64_t v1;
+	int64_t v2;
+
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "equal on non-integer");
+		return gd->singleton_False;
+	}
+
+	v1 = (car(args))->data.intnum.value;
+
+	args = cdr(args);
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "equal on non-integer");
+		return gd->singleton_False;
+	}
+	v2 = (car(args))->data.intnum.value;
+
+	nn = div(v1, v2);
+
+	return s_NewInteger(gd, nn.quot);
+}
+
+pSlipObject slip_primitive__remainder_proc(pSlip gd, pSlipObject args)
+{
+	div_t nn;
+	int64_t v1;
+	int64_t v2;
+
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "equal on non-integer");
+		return gd->singleton_False;
+	}
+
+	v1 = (car(args))->data.intnum.value;
+
+	args = cdr(args);
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "equal on non-integer");
+		return gd->singleton_False;
+	}
+	v2 = (car(args))->data.intnum.value;
+
+	nn = div(v1, v2);
+
+	return s_NewInteger(gd, nn.rem);
+}
+
+pSlipObject slip_primitive__cons(pSlip gd, pSlipObject args)
+{
+	return cons(gd, car(args), cadr(args));
+}
+
+pSlipObject slip_primitive__car(pSlip gd, pSlipObject args)
+{
+	return caar(args);
+}
+
+pSlipObject slip_primitive__cdr(pSlip gd, pSlipObject args)
+{
+	return cdar(args);
+}
+
+pSlipObject slip_primitive__set_car(pSlip gd, pSlipObject args)
+{
+	set_car(car(args), cadr(args));
+	return gd->singleton_OKSymbol;
+}
+
+pSlipObject slip_primitive__set_cdr(pSlip gd, pSlipObject args)
+{
+	set_cdr(car(args), cadr(args));
+	return gd->singleton_OKSymbol;
+}
+
+pSlipObject slip_primitive__list(pSlip gd, pSlipObject args)
+{
+	return args;
+}
+
+pSlipObject slip_primitive__eq(pSlip gd, pSlipObject args)
+{
+	pSlipObject o1;
+	pSlipObject o2;
+
+	o1 = car(args);
+	o2 = cadr(args);
+
+	if (o1->type != o2->type)
+		return gd->singleton_False;
+
+	switch (o1->type)
+	{
+		case eType_INTNUM:
+			return(o1->data.intnum.value == o2->data.intnum.value) ? gd->singleton_True : gd->singleton_False;
+			break;
+
+		case eType_CHARACTER:
+			return(o1->data.character.value == o2->data.character.value) ? gd->singleton_True : gd->singleton_False;
+			break;
+
+		case eType_STRING:
+			if (o1->data.string.length == o2->data.string.length)
+			{
+				return(memcmp(o1->data.string.data, o2->data.string.data, o1->data.string.length) == 0) ? gd->singleton_True : gd->singleton_False;
+			}
+			else
+				return gd->singleton_False;
+			break;
+
+		default:
+			return(o1 == o2) ? gd->singleton_True : gd->singleton_False;
+	}
+}
+
 
 void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 {
@@ -467,6 +637,9 @@ void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 	slip_add_procedure(gd, env, "-", slip_primitive__sub_proc);
 	slip_add_procedure(gd, env, "*", slip_primitive__mul_proc);
 	slip_add_procedure(gd, env, "/", slip_primitive__div_proc);
+	slip_add_procedure(gd, env, "=", slip_primitive__is_num_equal);
+	slip_add_procedure(gd, env, "quotient", slip_primitive__quotient_proc);
+	slip_add_procedure(gd, env, "remainder", slip_primitive__remainder_proc);
 
 	slip_add_procedure(gd, env, "char->int", slip_primitive__convert_char_int);
 	slip_add_procedure(gd, env, "int->char", slip_primitive__convert_int_char);
@@ -475,13 +648,23 @@ void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 	slip_add_procedure(gd, env, "symbol->string", slip_primitive__convert_symbol_string);
 	slip_add_procedure(gd, env, "string->symbol", slip_primitive__convert_string_symbol);
 
-
 	slip_add_procedure(gd, env, "boolean?", slip_primitive__is_bool);
 	slip_add_procedure(gd, env, "string?", slip_primitive__is_string);
+	slip_add_procedure(gd, env, "nil?", slip_primitive__is_nil);
 	slip_add_procedure(gd, env, "int?", slip_primitive__is_int);
 	slip_add_procedure(gd, env, "char?", slip_primitive__is_char);
 	slip_add_procedure(gd, env, "symbol?", slip_primitive__is_symbol);
 	slip_add_procedure(gd, env, "procedure?", slip_primitive__is_proc);
 	slip_add_procedure(gd, env, "pair?", slip_primitive__is_pair);
+
+	slip_add_procedure(gd, env, "eq?", slip_primitive__eq);
+
+	slip_add_procedure(gd, env, "cons", slip_primitive__cons);
+	slip_add_procedure(gd, env, "car", slip_primitive__car);
+	slip_add_procedure(gd, env, "cdr", slip_primitive__cdr);
+	slip_add_procedure(gd, env, "set-car!", slip_primitive__set_car);
+	slip_add_procedure(gd, env, "set-cdr!", slip_primitive__set_cdr);
+	slip_add_procedure(gd, env, "list", slip_primitive__list);
+
 }
 

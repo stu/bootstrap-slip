@@ -338,7 +338,7 @@ pSlipObject car(pSlipObject pair)
 	return pair->data.pair.car;
 }
 
-static void set_car(pSlipObject obj, pSlipObject value)
+void set_car(pSlipObject obj, pSlipObject value)
 {
 	obj->data.pair.car = value;
 }
@@ -348,7 +348,7 @@ pSlipObject cdr(pSlipObject pair)
 	return pair->data.pair.cdr;
 }
 
-static void set_cdr(pSlipObject obj, pSlipObject value)
+void set_cdr(pSlipObject obj, pSlipObject value)
 {
 	obj->data.pair.cdr = value;
 }
@@ -731,11 +731,13 @@ static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 	else if (is_application(exp))
 	{
 		proc = slip_eval(gd, slip_operator(exp), env);
+		if (proc == NULL)
+			return gd->singleton_False;
+
 		if (proc->type == eType_PRIMITIVE_PROC)
 		{
 			args = list_of_values(gd, operands(exp), env);
-
-			if (proc == NULL)
+			if(args == NULL)
 				return gd->singleton_False;
 
 			return proc->data.prim_proc.func(gd, args);
@@ -988,7 +990,7 @@ static pSlipObject read_pair(pSlip gd)
 	car_obj = slip_read(gd);
 
 	tok = peek_input(gd);
-	if(tok == NULL)
+	if (tok == NULL)
 	{
 		throw_error(gd, "Unclosed list\n");
 		return cons(gd, car_obj, gd->singleton_EmptyList);
@@ -1173,6 +1175,8 @@ pSlip slip_init(void)
 	s->singleton_OKSymbol = s_NewSymbol(s, "ok");
 	s->singleton_SetSymbol = s_NewSymbol(s, "set!");
 	s->singleton_IFSymbol = s_NewSymbol(s, "if");
+	s->singleton_Nil = s_NewSymbol(s, "nil");
+	define_variable(s, s->singleton_Nil, s_NewObject(s), env);
 
 	s->obj_id = USER_OBJECT_ID_START;
 	s->running = SLIP_RUNNING;
@@ -1218,3 +1222,4 @@ void slip_reset_parser(pSlip slip)
 	slip->parse_data.eCurrentToken = NULL;
 	slip->parse_data.comment_depth = 0;
 }
+

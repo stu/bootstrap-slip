@@ -148,6 +148,7 @@ struct udtSlip
 	pSlipObject singleton_SetSymbol;
 	pSlipObject singleton_OKSymbol;
 	pSlipObject singleton_IFSymbol;
+	pSlipObject singleton_Nil;
 
 	DList       *lstSymbols;
 	DList       *lstStrings;
@@ -191,7 +192,8 @@ extern void slip_add_procedure(pSlip gd, pSlipEnvironment env, char *sym, pSlipO
 extern pSlipObject cons(pSlip gd, pSlipObject car, pSlipObject cdr);
 extern pSlipObject car(pSlipObject pair);
 extern pSlipObject cdr(pSlipObject pair);
-
+extern void set_car(pSlipObject obj, pSlipObject value);
+extern void set_cdr(pSlipObject obj, pSlipObject value);
 
 extern pSlipObject slip_evaluate(pSlip gd, pSlipObject exp);
 extern void slip_write(pSlip gd, pSlipObject obj);
