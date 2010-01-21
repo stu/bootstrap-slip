@@ -111,7 +111,6 @@ static int TokeniseBuffer(pSlip ctx, char *buff, uint32_t bufflen)
 			}
 			else if (flag == 0 && t->id == kCOMMENT_LINE)
 			{
-				printf("x5\n");
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				// skip token!
 				if (ctx->parse_data.comment_depth == 0)
