@@ -624,6 +624,11 @@ static int sIsObject_PrimitiveProc(pSlipObject obj)
 		return S_FALSE;
 }
 
+static pSlipObject make_begin(pSlip gd, pSlipObject exp)
+{
+    return cons(gd, gd->singleton_Begin, exp);
+}
+
 pSlipObject eval_assignment(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 {
 	pSlipObject a1;
@@ -704,6 +709,16 @@ static pSlipObject if_alternative(pSlip gd, pSlipObject exp)
 	{
 		return cadddr(exp);
 	}
+}
+
+static int is_begin(pSlip gd, pSlipObject exp)
+{
+	return is_tagged_list(exp, gd->singleton_Begin);
+}
+
+static pSlipObject begin_actions(pSlipObject exp)
+{
+	return cdr(exp);
 }
 
 static int is_application(pSlipObject exp)
@@ -789,6 +804,17 @@ static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 	{
 		return s_NewCompoundProc(gd, lambda_parameters(exp), lambda_body(exp), env);
 	}
+	else if (is_begin(gd, exp) == S_TRUE)
+	{
+		exp = begin_actions(exp);
+		while (!is_last_exp(gd, exp))
+		{
+			slip_eval(gd, first_exp(exp), env);
+			exp = rest_exps(exp);
+		}
+		exp = first_exp(exp);
+		goto tailcall;
+	}
 	else if (is_application(exp))
 	{
 		proc = slip_eval(gd, slip_operator(exp), env);
@@ -808,13 +834,7 @@ static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 			else if (sIsObject_CompoundProc(proc) == S_TRUE)
 			{
 				env = setup_environment(gd, proc->data.comp_proc.env, proc->data.comp_proc.params, args);
-				exp = proc->data.comp_proc.code;
-				while (!is_last_exp(gd, exp))
-				{
-					slip_eval(gd, first_exp(exp), env);
-					exp = rest_exps(exp);
-				}
-				exp = first_exp(exp);
+				exp = make_begin(gd, proc->data.comp_proc.code);
 				goto tailcall;
 			}
 			else
@@ -1258,6 +1278,7 @@ pSlip slip_init(void)
 	define_variable(s, s->singleton_Nil, s_NewObject(s), env);
 
 	s->singleton_Lambda = s_NewSymbol(s, "lambda");
+	s->singleton_Begin = s_NewSymbol(s, "begin");
 
 	s->obj_id = USER_OBJECT_ID_START;
 	s->running = SLIP_RUNNING;

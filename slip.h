@@ -154,6 +154,7 @@ struct udtSlip
 	pSlipObject singleton_IFSymbol;
 	pSlipObject singleton_Nil;
 	pSlipObject singleton_Lambda;
+	pSlipObject singleton_Begin;
 
 	DList       *lstSymbols;
 	DList       *lstStrings;
