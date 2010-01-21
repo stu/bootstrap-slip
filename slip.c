@@ -568,6 +568,61 @@ static pSlipObject lambda_body(pSlipObject exp)
 	return cddr(exp);
 }
 
+static pSlipObject make_application(pSlip gd, pSlipObject op, pSlipObject operands)
+{
+	return cons(gd, op, operands);
+}
+
+static int is_let(pSlip gd, pSlipObject exp)
+{
+	return is_tagged_list(exp, gd->singleton_Let);
+}
+
+static pSlipObject let_bindings(pSlipObject exp)
+{
+	return cadr(exp);
+}
+
+static pSlipObject let_body(pSlipObject exp)
+{
+	return cddr(exp);
+}
+
+static pSlipObject binding_parameter(pSlipObject binding)
+{
+	return car(binding);
+}
+
+static pSlipObject binding_argument(pSlipObject binding)
+{
+	return cadr(binding);
+}
+
+static pSlipObject bindings_parameters(pSlip gd, pSlipObject bindings)
+{
+	return sIsObject_EmptyList(gd, bindings) ? gd->singleton_EmptyList : cons(gd, binding_parameter(car(bindings)), bindings_parameters(gd, cdr(bindings)));
+}
+
+static pSlipObject bindings_arguments(pSlip gd, pSlipObject bindings)
+{
+	return sIsObject_EmptyList(gd, bindings) ? gd->singleton_EmptyList : cons(gd, binding_argument(car(bindings)), bindings_arguments(gd, cdr(bindings)));
+}
+
+static pSlipObject let_parameters(pSlip gd, pSlipObject exp)
+{
+	return bindings_parameters(gd, let_bindings(exp));
+}
+
+static pSlipObject let_arguments(pSlip gd, pSlipObject exp)
+{
+	return bindings_arguments(gd, let_bindings(exp));
+}
+
+static pSlipObject let_to_application(pSlip gd, pSlipObject exp)
+{
+	return make_application(gd, make_lambda(gd, let_parameters(gd, exp), let_body(exp)), let_arguments(gd, exp));
+}
+
 static pSlipObject definition_value(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 {
 	if (sIsObject_Symbol(cadr(exp)) == S_TRUE)
@@ -626,7 +681,12 @@ static int sIsObject_PrimitiveProc(pSlipObject obj)
 
 static pSlipObject make_begin(pSlip gd, pSlipObject exp)
 {
-    return cons(gd, gd->singleton_Begin, exp);
+	return cons(gd, gd->singleton_Begin, exp);
+}
+
+static pSlipObject make_if(pSlip gd, pSlipObject predicate, pSlipObject consequent, pSlipObject alternative)
+{
+	return cons(gd, gd->singleton_IFSymbol, cons(gd, predicate, cons(gd, consequent, cons(gd, alternative, gd->singleton_EmptyList))));
 }
 
 pSlipObject eval_assignment(pSlip gd, pSlipObject exp, pSlipEnvironment env)
@@ -719,6 +779,88 @@ static int is_begin(pSlip gd, pSlipObject exp)
 static pSlipObject begin_actions(pSlipObject exp)
 {
 	return cdr(exp);
+}
+
+static int is_cond(pSlip gd, pSlipObject exp)
+{
+	return is_tagged_list(exp, gd->singleton_Cond);
+}
+
+static pSlipObject cond_clauses(pSlipObject exp)
+{
+	return cdr(exp);
+}
+
+static pSlipObject cond_predicate(pSlipObject clause)
+{
+	return car(clause);
+}
+
+static pSlipObject cond_actions(pSlipObject clause)
+{
+	return cdr(clause);
+}
+
+static int is_cond_else_clause(pSlip gd, pSlipObject clause)
+{
+	if (cond_predicate(clause) == gd->singleton_Else)
+		return S_TRUE;
+	else
+		return S_FALSE;
+}
+
+static pSlipObject sequence_to_exp(pSlip gd, pSlipObject seq)
+{
+	if (sIsObject_EmptyList(gd, seq) == S_TRUE)
+	{
+		return seq;
+	}
+	else if (is_last_exp(gd, seq) == S_TRUE)
+	{
+		return first_exp(seq);
+	}
+	else
+	{
+		return make_begin(gd, seq);
+	}
+}
+
+static pSlipObject expand_clauses(pSlip gd, pSlipObject clauses)
+{
+	pSlipObject first;
+	pSlipObject rest;
+
+	if (sIsObject_EmptyList(gd, clauses) == S_TRUE)
+	{
+		return gd->singleton_False;
+	}
+	else
+	{
+		first = car(clauses);
+		rest  = cdr(clauses);
+
+		if (is_cond_else_clause(gd, first) == S_TRUE)
+		{
+			if (sIsObject_EmptyList(gd, rest) == S_TRUE)
+			{
+				return sequence_to_exp(gd, cond_actions(first));
+			}
+			else
+			{
+				throw_error(gd, "else clause isn't last cond->if");
+				return gd->singleton_False;
+			}
+		}
+		else
+		{
+			return make_if(gd, cond_predicate(first), sequence_to_exp(gd, cond_actions(first)), expand_clauses(gd, rest));
+		}
+	}
+}
+
+static pSlipObject cond_to_if(pSlip gd, pSlipObject exp)
+{
+	return expand_clauses(gd, cond_clauses(exp));
 }
 
 static int is_application(pSlipObject exp)
@@ -815,7 +957,17 @@ static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 		exp = first_exp(exp);
 		goto tailcall;
 	}
-	else if (is_application(exp))
+	else if (is_cond(gd, exp) == S_TRUE)
+	{
+		exp = cond_to_if(gd, exp);
+		goto tailcall;
+	}
+	else if (is_let(gd, exp) == S_TRUE)
+	{
+		exp = let_to_application(gd, exp);
+		goto tailcall;
+	}
+	else if (is_application(exp) == S_TRUE)
 	{
 		proc = slip_eval(gd, slip_operator(exp), env);
 		if (proc == NULL)
@@ -1279,6 +1431,9 @@ pSlip slip_init(void)
 
 	s->singleton_Lambda = s_NewSymbol(s, "lambda");
 	s->singleton_Begin = s_NewSymbol(s, "begin");
+	s->singleton_Cond = s_NewSymbol(s, "cond");
+	s->singleton_Else = s_NewSymbol(s, "else");
+	s->singleton_Let = s_NewSymbol(s, "let");
 
 	s->obj_id = USER_OBJECT_ID_START;
 	s->running = SLIP_RUNNING;
