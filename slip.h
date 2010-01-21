@@ -59,11 +59,13 @@ typedef enum
 	eType_PAIR,
 	eType_SYMBOL,
 	eType_PRIMITIVE_PROC,
+	eType_COMPOUND_PROC,
 
 	eType_MAX_TYPES
 
 } eSlipObjectType;
 
+typedef struct udtSlipEnvironment uSlipEnvironment, *pSlipEnvironment;
 typedef struct udtSlipObject uSlipObject, *pSlipObject;
 typedef struct udtSlip uSlip, *pSlip;
 
@@ -113,8 +115,10 @@ struct udtSlipObject
 
 		struct
 		{
-			DList *lstObjects;
-		} module;
+			pSlipObject code;
+			pSlipObject params;
+			pSlipEnvironment env;
+		} comp_proc;
 
 	} data;
 };
@@ -125,11 +129,11 @@ typedef struct udtSlipValue
 	pSlipObject val;
 } uSlipValue, *pSlipValue;
 
-typedef struct udtSlipEnvironment
+struct udtSlipEnvironment
 {
 	DList *lstVars;
-	DLElement *list_backtrack;
-} uSlipEnvironment, *pSlipEnvironment;
+	pSlipEnvironment parent;
+};
 
 
 #define USER_OBJECT_ID_START		32
@@ -149,6 +153,7 @@ struct udtSlip
 	pSlipObject singleton_OKSymbol;
 	pSlipObject singleton_IFSymbol;
 	pSlipObject singleton_Nil;
+	pSlipObject singleton_Lambda;
 
 	DList       *lstSymbols;
 	DList       *lstStrings;
@@ -177,6 +182,7 @@ extern pSlipObject s_NewCharacter(pSlip gd, int64_t value);
 extern pSlipObject s_NewString(pSlip gd, uint8_t *data, int length);
 extern pSlipObject s_NewSymbol(pSlip gd, uint8_t *data);
 extern pSlipObject s_NewBool(pSlip gd, int value);
+extern pSlipObject s_NewCompoundProc(pSlip gd, pSlipObject params, pSlipObject code, pSlipEnvironment env);
 
 extern int sIsObject_EmptyList(pSlip gd, pSlipObject obj);
 extern int sIsObject_String(pSlipObject obj);
@@ -185,6 +191,7 @@ extern int sIsObject_Pair(pSlipObject obj);
 extern int sIsObject_Boolean(pSlipObject obj);
 extern int sIsObject_Symbol(pSlipObject obj);
 extern int sIsObject_Integer(pSlipObject obj);
+extern int sIsObject_CompoundProc(pSlipObject obj);
 
 extern void throw_error(pSlip gd, char *s, ...);
 extern void slip_add_procedure(pSlip gd, pSlipEnvironment env, char *sym, pSlipObject (*func)(pSlip gd, pSlipObject args));

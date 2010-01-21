@@ -1,0 +1,18 @@
+(define
+	(add x y)
+	(+ x y))
+
+(add 4 5) // 9
+(define (double x)
+	(* 2 x))
+(double 3) // 6
+(define (map proc items) (if (null? items) '() (cons (proc (car items)) (map proc (cdr items)))))
+(map double '(0 1 2 3)) // (0 2 4 6)
+(define count ((lambda (total) (lambda (increment) (set! total (+ total increment)) total)) 0)) // initial total
+(count 3) // 3
+(count 5) // 8
+(define (factorial n) (define (iter product counter max-count) (if (> counter max-count) product (iter (* counter product) (+ counter 1) max-count))) (iter 1 1 n))
+(factorial 4) // 24
+(define Y (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+(define factorial (Y (lambda (fact) (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))))
+(factorial 5) // 120

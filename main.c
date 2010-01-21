@@ -49,12 +49,10 @@ static int TokeniseBuffer(pSlip ctx, char *buff, uint32_t bufflen)
 		int flag;
 
 		flag = 0;
-
 		t = PP_IDToken(ctx, z);
 
 		if (t != NULL)
 		{
-
 			t->line = ctx->parse_data.current_line;
 
 			if (t->id == kNEWLINE)
@@ -63,7 +61,6 @@ static int TokeniseBuffer(pSlip ctx, char *buff, uint32_t bufflen)
 				ctx->parse_data.current_line += strlen(t->z);
 			}
 
-			/****************/
 			if (t->id == kCOMMENT_START)
 			{
 				ctx->parse_data.comment_depth += 1;
@@ -72,11 +69,10 @@ static int TokeniseBuffer(pSlip ctx, char *buff, uint32_t bufflen)
 					printf("Nested comments unsupported\n");
 					exit(0);
 				}
-				flag = 1;
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				FreeToken(t);
 				t = (void*) 1;
-				flag = 1;
+				flag = 2;
 			}
 			else if (t->id == kCOMMENT_END)
 			{
@@ -86,57 +82,59 @@ static int TokeniseBuffer(pSlip ctx, char *buff, uint32_t bufflen)
 					printf("Unmatched comments\n");
 					exit(0);
 				}
-				flag = 1;
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				FreeToken(t);
 				t = (void*) 1;
-				flag = 1;
+				flag = 2;
 			}
 
-
-			// check line comment
 			if (flag == 0 && ctx->parse_data.comment_depth == 1000)
 			{
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				if (t->id == kNEWLINE)
-				{
 					ctx->parse_data.comment_depth = 0;
-					FreeToken(t);
-					t = (void*) 1;
-					flag = 1;
-				}
-				else
-				{
-					FreeToken(t);
-					t = (void*) 1;
-					flag = 1;
-				}
+
+				FreeToken(t);
+				t = (void*) 1;
+				flag = 2;
 			}
 			else if (flag == 0 && ctx->parse_data.comment_depth >= 1)
 			{
+				if(strlen(t->z) == 0)
+					ctx->parse_data.buff_start += 1;
+
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				// skip token!
 				FreeToken(t);
 				t = (void*) 1;
-				flag = 1;
+				flag = 2;
 			}
 			else if (flag == 0 && t->id == kCOMMENT_LINE)
 			{
+				printf("x5\n");
 				z = ctx->parse_data.buff_start + strlen(t->z);
 				// skip token!
-				ctx->parse_data.comment_depth = 1000;
+				if (ctx->parse_data.comment_depth == 0)
+					ctx->parse_data.comment_depth = 1000;
+
 				FreeToken(t);
 				t = (void*) 1;
-				flag = 1;
+				flag = 2;
 			}
-
 			else if (flag == 0)
 			{
 				if (strlen(t->z) > 0)
 				{
-					dlist_ins(ctx->parse_data.lstTokens, t);
+					if (t->id != kNEWLINE && ctx->parse_data.comment_depth == 0)
+						dlist_ins(ctx->parse_data.lstTokens, t);
+
 					z = ctx->parse_data.buff_start + strlen(t->z);
 				}
+			}
+			else
+			{
+				if (flag == 1)
+					z = ctx->parse_data.buff_start + strlen(t->z);
 			}
 		}
 	} while (t != NULL);
@@ -203,15 +201,21 @@ int main(int argc, char *argv[])
 {
 	pSlip slip;
 	char *buff;
+	int32_t bufflen = 1024;
 
 	FILE *fp = stdin;
-	buff = malloc(1024);
 
 	if (argc == 2)
 	{
 		fp = fopen(argv[1], "rt");
 		assert(fp != NULL);
+
+		fseek(fp, 0x0L, SEEK_END);
+		bufflen = ftell(fp);
+		fseek(fp, 0x0L, SEEK_SET);
 	}
+
+	buff = malloc(bufflen+16);
 
 	slip = slip_init();
 	assert(slip != NULL);
@@ -227,19 +231,13 @@ int main(int argc, char *argv[])
 		printf("> ");
 		fflush(stdout);
 
-		memset(buff, 0x0, 1024);
+		memset(buff, 0x0, bufflen+1);
 		fflush(stdout);
-		fgets(buff, 1023, fp);
+		fread(buff, 1, bufflen, fp);
 
 		// echo if script
 		if (fp != stdin)
 			printf("%s", buff);
-		else
-		{
-			// trim off cr/lf.s
-			p = strchr(buff, 0x0A); if (p != NULL) *p = 0;
-			p = strchr(buff, 0x0D); if (p != NULL) *p = 0;
-		}
 
 		fflush(stdout);
 
@@ -247,18 +245,20 @@ int main(int argc, char *argv[])
 		{
 			if ( TokeniseBuffer(slip, buff, strlen(buff)) == 0)
 			{
-				obj = slip_read(slip);
-				if (slip->running == SLIP_RUNNING && obj != NULL)
+				while (obj != NULL && slip->running == SLIP_RUNNING)
 				{
-					obj = slip_evaluate(slip, obj);
+					obj = slip_read(slip);
 					if (slip->running == SLIP_RUNNING && obj != NULL)
-						slip_write(slip, obj);
+					{
+						obj = slip_evaluate(slip, obj);
+						if (slip->running == SLIP_RUNNING && obj != NULL)
+							slip_write(slip, obj);
+						printf("\n");
+					}
 				}
 			}
 			else
 				printf("tokenise buffer failed\n");
-
-			printf("\n");
 		}
 		else
 			slip->running = SLIP_SHUTDOWN;

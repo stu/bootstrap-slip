@@ -103,6 +103,8 @@ pSlipObject s_NewObject(pSlip gd)
 
 	if (o == NULL)
 	{
+		fflush(stdout);
+		fflush(stdin);
 		fprintf(stderr, "out of memory\n");
 		exit(1);
 	}
@@ -153,10 +155,13 @@ static void s_ReleaseObject(pSlip gd, pSlipObject obj)
 		case eType_BOOL:
 		case eType_CHARACTER:
 		case eType_PRIMITIVE_PROC:
+		case eType_COMPOUND_PROC:
 			break;
 
 
 		default:
+			fflush(stdout);
+			fflush(stdin);
 			fprintf(stderr, "cannot free unknown type %i\n", obj->type);
 			exit(1);
 	}
@@ -259,61 +264,65 @@ pSlipObject s_NewBool(pSlip gd, int value)
 	return obj;
 }
 
-int sIsObject_EmptyList(pSlip gd, pSlipObject obj)
+pSlipObject s_NewCompoundProc(pSlip gd, pSlipObject params, pSlipObject code, pSlipEnvironment env)
 {
-	if (obj->type == eType_EMPTY_LIST)
+	pSlipObject obj;
+
+	obj = s_NewObject(gd);
+	obj->type = eType_COMPOUND_PROC;
+	obj->data.comp_proc.params = params;
+	obj->data.comp_proc.code = code;
+	obj->data.comp_proc.env = env;
+
+	return obj;
+}
+
+static int IsObjectX(pSlipObject o, int type)
+{
+	if (o->type == type)
 		return S_TRUE;
 	else
 		return S_FALSE;
+}
+
+int sIsObject_CompoundProc(pSlipObject obj)
+{
+	return IsObjectX(obj, eType_COMPOUND_PROC);
+}
+
+int sIsObject_EmptyList(pSlip gd, pSlipObject obj)
+{
+	return IsObjectX(obj, eType_EMPTY_LIST);
 }
 
 int sIsObject_String(pSlipObject obj)
 {
-	if (obj->type == eType_STRING)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_STRING);
 }
 
 int sIsObject_Character(pSlipObject obj)
 {
-	if (obj->type == eType_CHARACTER)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_CHARACTER);
 }
 
 int sIsObject_Pair(pSlipObject obj)
 {
-	if (obj->type == eType_PAIR)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_PAIR);
 }
 
 int sIsObject_Boolean(pSlipObject obj)
 {
-	if (obj->type == eType_BOOL)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_BOOL);
 }
 
 int sIsObject_Symbol(pSlipObject obj)
 {
-	if (obj->type == eType_SYMBOL)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_SYMBOL);
 }
-
 
 int sIsObject_Integer(pSlipObject obj)
 {
-	if (obj->type == eType_INTNUM)
-		return S_TRUE;
-	else
-		return S_FALSE;
+	return IsObjectX(obj, eType_INTNUM);
 }
 
 pSlipObject s_NewPair(pSlip gd, pSlipObject car, pSlipObject cdr)
@@ -353,34 +362,43 @@ void set_cdr(pSlipObject obj, pSlipObject value)
 	obj->data.pair.cdr = value;
 }
 
-
-static pSlipObject lookup_variable_value(pSlip gd, pSlipObject var, pSlipEnvironment env)
+static pSlipEnvironment enclosing_environment(pSlipEnvironment env)
 {
-	pSlipEnvironment environment;
-	DLElement *envx;
+	return env->parent;
+}
+
+static pSlipValue ScanForVar(pSlipObject o, pSlipEnvironment env)
+{
 	DLElement *e;
 	pSlipValue v;
 
-	envx = env->list_backtrack;
-
-	while (envx != NULL)
+	e = dlist_head(env->lstVars);
+	while (e != NULL)
 	{
-		environment = dlist_data(envx);
-		envx = dlist_next(envx);
+		v = dlist_data(e);
+		e = dlist_next(e);
 
-		e = dlist_head(environment->lstVars);
-
-		while (e != NULL)
+		if (v->var == o)
 		{
-			v = dlist_data(e);
-			e = dlist_next(e);
-
-			if (v->var == var)
-			{
-				return v->val;
-			}
+			return v;
 		}
 	}
+
+	return NULL;
+}
+
+static pSlipObject lookup_variable_value(pSlip gd, pSlipObject var, pSlipEnvironment env)
+{
+	pSlipValue v;
+
+	do
+	{
+		v = ScanForVar(var, env);
+		if (v != NULL)
+			return v->val;
+
+		env = enclosing_environment(env);
+	}while (env != NULL);
 
 	throw_error(gd, "unbound variable %s for lookup\n", (char*)var->data.symbol.value);
 	return NULL;
@@ -388,33 +406,19 @@ static pSlipObject lookup_variable_value(pSlip gd, pSlipObject var, pSlipEnviron
 
 static void set_variable_value(pSlip gd, pSlipObject var, pSlipObject val, pSlipEnvironment env)
 {
-	pSlipEnvironment environment;
-	DLElement *envx;
-	DLElement *e;
 	pSlipValue v;
 
-	envx = env->list_backtrack;
-
-	while (envx != NULL)
+	do
 	{
-		environment = dlist_data(envx);
-		envx = dlist_next(envx);
-
-		e = dlist_head(environment->lstVars);
-
-		while (e != NULL)
+		v = ScanForVar(var, env);
+		if (v != NULL)
 		{
-			v = dlist_data(e);
-			e = dlist_next(e);
-
-			if (v->var == var)
-			{
-				// update value
-				v->val = val;
-				return;
-			}
+			v->val = val;
+			return;
 		}
-	}
+
+		env = enclosing_environment(env);
+	}while (env != NULL);
 
 	throw_error(gd, "unbound variable %s for assignment\n", (char*)var->data.symbol.value);
 }
@@ -432,21 +436,13 @@ static pSlipObject make_primitive_proc(pSlip gd, pSlipObject (*func)(pSlip gd, p
 
 static void define_variable(pSlip gd, pSlipObject var, pSlipObject val, pSlipEnvironment env)
 {
-	DLElement *e;
 	pSlipValue v;
 
-	e = dlist_head(env->lstVars);
-	while (e != NULL)
+	v = ScanForVar(var, env);
+	if (v != NULL)
 	{
-		v = dlist_data(e);
-		e = dlist_next(e);
-
-		if (v->var == var)
-		{
-			// update value
-			v->val = val;
-			return;
-		}
+		v->val = val;
+		return;
 	}
 
 	v = NewValue();
@@ -460,16 +456,24 @@ void slip_add_procedure(pSlip gd, pSlipEnvironment env, char *sym, pSlipObject (
 	define_variable(gd, s_NewSymbol(gd, sym), make_primitive_proc(gd, func), env);
 }
 
-static pSlipEnvironment setup_environment(pSlip gd)
+static pSlipEnvironment setup_environment(pSlip gd, pSlipEnvironment parent, pSlipObject params, pSlipObject args)
 {
 	pSlipEnvironment env;
 
 	env = NewEnvironment();
-
 	dlist_ins(gd->lstGlobalEnvironment, env);
 
-	// point the backtrack
-	env->list_backtrack = dlist_tail(gd->lstGlobalEnvironment);
+	env->parent = parent;
+
+	// propagate args+params across time and space!
+
+	while (args != gd->singleton_EmptyList && params != gd->singleton_EmptyList)
+	{
+		define_variable(gd, car(params), car(args), env);
+
+		args = cdr(args);
+		params = cdr(params);
+	}
 
 	return env;
 }
@@ -477,12 +481,12 @@ static pSlipEnvironment setup_environment(pSlip gd)
 ///////////////////////////////////////////////////////////////////////////
 
 
-int is_self_evaluating(pSlipObject exp)
+static int is_self_evaluating(pSlipObject exp)
 {
 	return sIsObject_Boolean(exp) == S_TRUE || sIsObject_Integer(exp) == S_TRUE  || sIsObject_Character(exp) == S_TRUE || sIsObject_String(exp) == S_TRUE ;
 }
 
-int is_tagged_list(pSlipObject expression, pSlipObject tag)
+static int is_tagged_list(pSlipObject expression, pSlipObject tag)
 {
 	pSlipObject the_car;
 
@@ -497,52 +501,84 @@ int is_tagged_list(pSlipObject expression, pSlipObject tag)
 	return S_FALSE;
 }
 
-int is_quoted(pSlip gd, pSlipObject expression)
+static int is_quoted(pSlip gd, pSlipObject expression)
 {
 	return is_tagged_list(expression, gd->singleton_QuoteSymbol);
 }
 
-int is_variable(pSlipObject expression)
+static int is_variable(pSlipObject expression)
 {
 	return sIsObject_Symbol(expression);
 }
 
-pSlipObject text_of_quotation(pSlipObject exp)
+static pSlipObject text_of_quotation(pSlipObject exp)
 {
 	return cadr(exp);
 }
 
-int is_assignment(pSlip gd, pSlipObject exp)
+static int is_assignment(pSlip gd, pSlipObject exp)
 {
 	return is_tagged_list(exp, gd->singleton_SetSymbol);
 }
 
-// dlist lookups??
-pSlipObject assignment_variable(pSlipObject exp)
+static pSlipObject assignment_variable(pSlipObject exp)
 {
 	return car(cdr(exp));
 }
 
-pSlipObject assignment_value(pSlipObject exp)
+static pSlipObject assignment_value(pSlipObject exp)
 {
 	return car(cdr(cdr(exp)));
 }
 
-char is_definition(pSlip gd, pSlipObject exp)
+static char is_definition(pSlip gd, pSlipObject exp)
 {
 	return is_tagged_list(exp, gd->singleton_DefineSymbol);
 }
 
-pSlipObject definition_variable(pSlipObject exp)
+static pSlipObject definition_variable(pSlipObject exp)
+{
+	if (sIsObject_Symbol(cadr(exp)) == S_TRUE)
+	{
+		return cadr(exp);
+	}
+	else
+	{
+		return caadr(exp);
+	}
+}
+
+static pSlipObject make_lambda(pSlip gd, pSlipObject params, pSlipObject code)
+{
+	return cons(gd, gd->singleton_Lambda, cons(gd, params, code));
+}
+
+static int is_lambda(pSlip gd, pSlipObject exp)
+{
+	return is_tagged_list(exp, gd->singleton_Lambda);
+}
+
+static pSlipObject lambda_parameters(pSlipObject exp)
 {
 	return cadr(exp);
 }
 
-pSlipObject definition_value(pSlipObject exp)
+static pSlipObject lambda_body(pSlipObject exp)
 {
-	return caddr(exp);
+	return cddr(exp);
 }
 
+static pSlipObject definition_value(pSlip gd, pSlipObject exp, pSlipEnvironment env)
+{
+	if (sIsObject_Symbol(cadr(exp)) == S_TRUE)
+	{
+		return caddr(exp);
+	}
+	else
+	{
+		return make_lambda(gd, cdadr(exp), cddr(exp));
+	}
+}
 
 void throw_error(pSlip gd, char *s, ...)
 {
@@ -555,6 +591,9 @@ void throw_error(pSlip gd, char *s, ...)
 	vsnprintf(x, 1023, s, args);
 	va_end(args);
 
+	fflush(stdout);
+	fflush(stdin);
+
 	fprintf(stderr, "%s", x);
 	fflush(stderr);
 	free(x);
@@ -562,6 +601,20 @@ void throw_error(pSlip gd, char *s, ...)
 	gd->running = SLIP_ERROR;
 }
 
+static int is_last_exp(pSlip gd, pSlipObject seq)
+{
+	return sIsObject_EmptyList(gd, cdr(seq));
+}
+
+static pSlipObject first_exp(pSlipObject seq)
+{
+	return car(seq);
+}
+
+static pSlipObject rest_exps(pSlipObject seq)
+{
+	return cdr(seq);
+}
 
 static int sIsObject_PrimitiveProc(pSlipObject obj)
 {
@@ -591,7 +644,7 @@ pSlipObject eval_assignment(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 	if (gd->running == SLIP_RUNNING)
 		return gd->singleton_OKSymbol;
 	else
-		return NULL;
+		return gd->singleton_False;
 }
 
 pSlipObject eval_definition(pSlip gd, pSlipObject exp, pSlipEnvironment env)
@@ -600,7 +653,7 @@ pSlipObject eval_definition(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 	pSlipObject x1;
 	pSlipObject x2;
 
-	x1 = definition_value(exp);
+	x1 = definition_value(gd, exp, env);
 	assert(x1 != NULL);
 
 	a2 = slip_eval(gd, x1, env);
@@ -614,7 +667,7 @@ pSlipObject eval_definition(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 	if (gd->running == SLIP_RUNNING)
 		return gd->singleton_OKSymbol;
 	else
-		return NULL;
+		return gd->singleton_False;
 }
 
 static int is_if(pSlip gd, pSlipObject expression)
@@ -634,8 +687,6 @@ static pSlipObject if_consequent(pSlipObject exp)
 
 static int is_true(pSlip gd, pSlipObject obj)
 {
-	//return !is_false(gd, obj);
-
 	// all values are true except for false itself.
 	if (gd->singleton_False == obj)
 		return S_FALSE;
@@ -687,13 +738,19 @@ static pSlipObject rest_operands(pSlipObject ops)
 
 static pSlipObject list_of_values(pSlip gd, pSlipObject exps, pSlipEnvironment env)
 {
-	if (is_no_operands(gd, exps))
+	if (is_no_operands(gd, exps) == S_TRUE)
 	{
 		return gd->singleton_EmptyList;
 	}
 	else
 	{
-		return cons(gd, slip_eval(gd, first_operand(exps), env), list_of_values(gd, rest_operands(exps), env));
+		pSlipObject x;
+
+		x = slip_eval(gd, first_operand(exps), env);
+		if (x == NULL)
+			x = gd->singleton_Nil;
+
+		return cons(gd, x, list_of_values(gd, rest_operands(exps), env));
 	}
 }
 
@@ -728,29 +785,55 @@ static pSlipObject slip_eval(pSlip gd, pSlipObject exp, pSlipEnvironment env)
 		exp = is_true(gd, slip_eval(gd, if_predicate(exp), env)) == S_TRUE ? if_consequent(exp) : if_alternative(gd, exp);
 		goto tailcall;
 	}
+	else if (is_lambda(gd, exp) == S_TRUE)
+	{
+		return s_NewCompoundProc(gd, lambda_parameters(exp), lambda_body(exp), env);
+	}
 	else if (is_application(exp))
 	{
 		proc = slip_eval(gd, slip_operator(exp), env);
 		if (proc == NULL)
 			return gd->singleton_False;
 
-		if (proc->type == eType_PRIMITIVE_PROC)
+		if (proc->type == eType_PRIMITIVE_PROC || proc->type == eType_COMPOUND_PROC)
 		{
 			args = list_of_values(gd, operands(exp), env);
-			if(args == NULL)
+			if (args == NULL)
 				return gd->singleton_False;
 
-			return proc->data.prim_proc.func(gd, args);
+			if (sIsObject_PrimitiveProc(proc) == S_TRUE)
+			{
+				return proc->data.prim_proc.func(gd, args);
+			}
+			else if (sIsObject_CompoundProc(proc) == S_TRUE)
+			{
+				env = setup_environment(gd, proc->data.comp_proc.env, proc->data.comp_proc.params, args);
+				exp = proc->data.comp_proc.code;
+				while (!is_last_exp(gd, exp))
+				{
+					slip_eval(gd, first_exp(exp), env);
+					exp = rest_exps(exp);
+				}
+				exp = first_exp(exp);
+				goto tailcall;
+			}
+			else
+			{
+				throw_error(gd, "unknown procedure type\n");
+				return gd->singleton_False;
+			}
 		}
 		else
 			return proc;
-
 	}
 	else
 	{
 		throw_error(gd, "cannot eval unknown expression type\n");
 		return NULL;
 	}
+
+	throw_error(gd, "what??\n");
+	return NULL;
 }
 
 static pSlipEnvironment get_global_environment(pSlip gd)
@@ -809,6 +892,7 @@ void slip_write(pSlip gd, pSlipObject obj)
 	switch (obj->type)
 	{
 		case eType_PRIMITIVE_PROC:
+		case eType_COMPOUND_PROC:
 			printf("#<procedure> %p", obj->data.prim_proc.func);
 			break;
 
@@ -1028,7 +1112,7 @@ pSlipObject slip_read(pSlip gd)
 	if (gd->running != SLIP_RUNNING)
 		return NULL;
 
-	while ((tok = read_input(gd)) != NULL)
+	while ((tok = read_input(gd)) != NULL && gd->running == SLIP_RUNNING)
 	{
 		switch (tok->id)
 		{
@@ -1069,12 +1153,6 @@ pSlipObject slip_read(pSlip gd)
 			case kID:
 				if (strcmp(tok->z, "quit") == 0)
 					gd->running = SLIP_SHUTDOWN;
-
-//  			if (!is_delimiter(peek_input(gd)))
-//  			{
-//  				throw_error(gd, "symbol not followed by delimiter. Found \"%s\"\n", tok->z);
-//  				return NULL;
-//  			}
 
 				return s_NewSymbol(gd, tok->z);
 				break;
@@ -1148,7 +1226,8 @@ pSlipObject slip_read(pSlip gd)
 	}
 
 	//throw_error(gd, "read illegal state\n");
-	return NULL;
+	gd->running = SLIP_SHUTDOWN;
+	return gd->singleton_OKSymbol;
 }
 
 pSlip slip_init(void)
@@ -1163,7 +1242,7 @@ pSlip slip_init(void)
 	s->lstSymbols = NewDList(NULL);
 	s->lstStrings = NewDList(NULL);
 	s->lstGlobalEnvironment = NewDList(FreeEnvironment);
-	env = setup_environment(s);
+	env = setup_environment(s, NULL, s->singleton_EmptyList, s->singleton_EmptyList);
 
 	s->singleton_False = s_NewBool(s, S_FALSE);
 	s->singleton_True = s_NewBool(s, S_TRUE);
@@ -1177,6 +1256,8 @@ pSlip slip_init(void)
 	s->singleton_IFSymbol = s_NewSymbol(s, "if");
 	s->singleton_Nil = s_NewSymbol(s, "nil");
 	define_variable(s, s->singleton_Nil, s_NewObject(s), env);
+
+	s->singleton_Lambda = s_NewSymbol(s, "lambda");
 
 	s->obj_id = USER_OBJECT_ID_START;
 	s->running = SLIP_RUNNING;
@@ -1222,4 +1303,3 @@ void slip_reset_parser(pSlip slip)
 	slip->parse_data.eCurrentToken = NULL;
 	slip->parse_data.comment_depth = 0;
 }
-

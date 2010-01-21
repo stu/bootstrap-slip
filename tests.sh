@@ -11,3 +11,5 @@
 ./slip tests/repl_10.txt
 ./slip tests/repl_11.txt
 ./slip tests/repl_12.txt
+./slip tests/repl_13.txt
+

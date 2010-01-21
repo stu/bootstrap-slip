@@ -329,6 +329,9 @@ static pSlipObject slip_primitive__convert_string_symbol_x(pSlip gd, pSlipObject
 
 static pSlipObject slip_primitive__is_type_x(pSlip gd, pSlipObject args, int type)
 {
+	if (args == NULL)
+		return gd->singleton_False;
+
 	if (args->type == eType_PAIR)
 	{
 		pSlipObject result = gd->singleton_EmptyList;
@@ -429,6 +432,14 @@ static pSlipObject slip_primitive__is_nil(pSlip gd, pSlipObject args)
 		return slip_primitive__is_type_x(gd, car(args), eType_NIL);
 }
 
+static pSlipObject slip_primitive__is_null(pSlip gd, pSlipObject args)
+{
+	if (sIsObject_EmptyList(gd, car(args)) == S_FALSE)
+		return gd->singleton_False;
+	else
+		return gd->singleton_True;
+}
+
 static pSlipObject slip_primitive__is_symbol(pSlip gd, pSlipObject args)
 {
 	if (sIsObject_EmptyList(gd, cdr(args)) == S_FALSE)
@@ -455,10 +466,10 @@ static pSlipObject slip_primitive__is_char(pSlip gd, pSlipObject args)
 
 static pSlipObject slip_primitive__is_proc(pSlip gd, pSlipObject args)
 {
-	if (sIsObject_EmptyList(gd, cdr(args)) == S_FALSE)
-		return slip_primitive__is_type_x(gd, args, eType_PRIMITIVE_PROC);
+	if (car(args)->type == eType_PRIMITIVE_PROC || car(args)->type == eType_COMPOUND_PROC)
+		return gd->singleton_True;
 	else
-		return slip_primitive__is_type_x(gd, car(args), eType_PRIMITIVE_PROC);
+		return gd->singleton_False;
 }
 
 static pSlipObject slip_primitive__is_pair(pSlip gd, pSlipObject args)
@@ -492,7 +503,6 @@ pSlipObject slip_primitive__is_num_equal(pSlip gd, pSlipObject args)
 	value = (car(args))->data.intnum.value;
 
 	args = cdr(args);
-
 	while (sIsObject_EmptyList(gd, args) == S_FALSE)
 	{
 		if (car(args)->type != eType_INTNUM)
@@ -500,12 +510,13 @@ pSlipObject slip_primitive__is_num_equal(pSlip gd, pSlipObject args)
 			throw_error(gd, "equal on non-integer");
 			return gd->singleton_False;
 		}
-
-		if (value != car(args)->data.intnum.value)
+		else if (value != car(args)->data.intnum.value)
 		{
 			return gd->singleton_False;
 		}
+		args = cdr(args);
 	}
+
 	return gd->singleton_True;
 }
 
@@ -616,20 +627,76 @@ pSlipObject slip_primitive__eq(pSlip gd, pSlipObject args)
 			return(o1->data.character.value == o2->data.character.value) ? gd->singleton_True : gd->singleton_False;
 			break;
 
-		case eType_STRING:
-			if (o1->data.string.length == o2->data.string.length)
-			{
-				return(memcmp(o1->data.string.data, o2->data.string.data, o1->data.string.length) == 0) ? gd->singleton_True : gd->singleton_False;
-			}
-			else
-				return gd->singleton_False;
-			break;
-
 		default:
 			return(o1 == o2) ? gd->singleton_True : gd->singleton_False;
 	}
 }
 
+pSlipObject slip_primitive__less_than(pSlip gd, pSlipObject args)
+{
+	int64_t previous;
+	int64_t next;
+
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "< on non-integer");
+		return gd->singleton_False;
+	}
+
+	previous = (car(args))->data.intnum.value;
+	while ((args = cdr(args)) != gd->singleton_EmptyList)
+	{
+		if (car(args)->type != eType_INTNUM)
+		{
+			throw_error(gd, "< on non-integer");
+			return gd->singleton_False;
+		}
+
+		next = (car(args))->data.intnum.value;
+		if (previous < next)
+		{
+			previous = next;
+		}
+		else
+		{
+			return gd->singleton_False;
+		}
+	}
+	return gd->singleton_True;
+}
+
+pSlipObject slip_primitive__greater_than(pSlip gd, pSlipObject args)
+{
+	int64_t previous;
+	int64_t next;
+
+	if (car(args)->type != eType_INTNUM)
+	{
+		throw_error(gd, "> on non-integer");
+		return gd->singleton_False;
+	}
+
+	previous = (car(args))->data.intnum.value;
+	while ((args = cdr(args)) != gd->singleton_EmptyList)
+	{
+		if (car(args)->type != eType_INTNUM)
+		{
+			throw_error(gd, "> on non-integer");
+			return gd->singleton_False;
+		}
+
+		next = (car(args))->data.intnum.value;
+		if (previous > next)
+		{
+			previous = next;
+		}
+		else
+		{
+			return gd->singleton_False;
+		}
+	}
+	return gd->singleton_True;
+}
 
 void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 {
@@ -638,6 +705,9 @@ void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 	slip_add_procedure(gd, env, "*", slip_primitive__mul_proc);
 	slip_add_procedure(gd, env, "/", slip_primitive__div_proc);
 	slip_add_procedure(gd, env, "=", slip_primitive__is_num_equal);
+	slip_add_procedure(gd, env, "<", slip_primitive__less_than);
+	slip_add_procedure(gd, env, ">", slip_primitive__greater_than);
+
 	slip_add_procedure(gd, env, "quotient", slip_primitive__quotient_proc);
 	slip_add_procedure(gd, env, "remainder", slip_primitive__remainder_proc);
 
@@ -651,6 +721,7 @@ void slip_install_primitives(pSlip gd, pSlipEnvironment env)
 	slip_add_procedure(gd, env, "boolean?", slip_primitive__is_bool);
 	slip_add_procedure(gd, env, "string?", slip_primitive__is_string);
 	slip_add_procedure(gd, env, "nil?", slip_primitive__is_nil);
+	slip_add_procedure(gd, env, "null?", slip_primitive__is_null);
 	slip_add_procedure(gd, env, "int?", slip_primitive__is_int);
 	slip_add_procedure(gd, env, "char?", slip_primitive__is_char);
 	slip_add_procedure(gd, env, "symbol?", slip_primitive__is_symbol);
