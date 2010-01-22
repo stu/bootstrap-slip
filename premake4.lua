@@ -4,15 +4,16 @@ solution "slip"
 	project "slip"
 		kind "ConsoleApp"
 		language "C"
-		files { "*.h", "*.c" }
-		excludes { "tools/*", "split_tokeniser.re2c" }
-		prebuildcommands { "re2c -o  slip_tokeniser.c slip_tokeniser.re2c"}
+		files { "*.h", "*.c", "slip_tokeniser.c" }
+		excludes { "slip_tokeniser.re2c" }
 
 	configuration "windows"
 		links { "kernel32" }
+		prebuildcommands { "re2c.exe -o slip_tokeniser.c slip_tokeniser.re2c"}
 
 	configuration "linux"
 		links { "m" }
+		prebuildcommands { "re2c -o slip_tokeniser.c slip_tokeniser.re2c"}
 
 	configuration "Debug"
 		defines { "DEBUG", "MEMWATCH"}
@@ -21,3 +22,4 @@ solution "slip"
 	configuration "Release"
 		defines { "NDEBUG" }
 		flags { "Optimize" }
+
